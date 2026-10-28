@@ -7,16 +7,18 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {
     DeploySuite,
     ExtendedNetworksUnexpected,
+    MechanismUnclaimed,
     UnexpectedMechanismData
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ChainDeploy} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeploySuitesBaseZoltuMechanismTest
-/// @notice The Zoltu defaults of the mechanism hooks on `RainDeploySuitesBase`.
+/// @notice `LibRainDeployZoltuMechanism` through a Zoltu-only declaration.
 contract RainDeploySuitesBaseZoltuMechanismTest is Test {
     ExampleDeploy internal sDeploy;
 
@@ -40,7 +42,15 @@ contract RainDeploySuitesBaseZoltuMechanismTest is Test {
         });
     }
 
-    /// A Zoltu suite has no mechanism data.
+    function zoltuDeployedAddress(DeploySuite memory suite) external pure returns (address) {
+        return LibRainDeployZoltuMechanism.deployedAddress(suite, 0);
+    }
+
+    function zoltuDeployStepData(DeploySuite memory suite) external pure returns (bytes memory) {
+        return LibRainDeployZoltuMechanism.deployStepData(suite, 0);
+    }
+
+    /// A Zoltu-only declaration claims no suite carrying mechanism data, and the Zoltu mechanism refuses one.
     function testZoltuSuiteCarryingMechanismDataIsRefused() external {
         DeploySuite memory suite = zoltuMockDeployableSuite("zoltu-with-data");
         assertEq(sDeploy.externalDeployedAddresses(suite)[0], suite.storedDeployedAddress);
@@ -49,14 +59,16 @@ contract RainDeploySuitesBaseZoltuMechanismTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        vm.expectRevert(abi.encodeWithSelector(MechanismUnclaimed.selector, suite.suite));
         sDeploy.externalDeployedAddresses(suite);
-        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        vm.expectRevert(abi.encodeWithSelector(MechanismUnclaimed.selector, suite.suite));
         sDeploy.externalDeployLocally(vm, suite);
-        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        vm.expectRevert(abi.encodeWithSelector(MechanismUnclaimed.selector, suite.suite));
         sDeploy.externalDeployAndBroadcast(vm, networks, 1, suite, suite);
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
-        sDeploy.externalDeployStepData(suite, 42161);
+        this.zoltuDeployedAddress(suite);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        this.zoltuDeployStepData(suite);
     }
 
     /// The Zoltu step deploys its suite to the suite's derived address.
