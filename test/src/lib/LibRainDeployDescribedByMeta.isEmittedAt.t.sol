@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDescribedByMeta} from "../../../src/lib/LibRainDeployDescribedByMeta.sol";
 import {LocalLogsForkVm} from "../../concrete/LocalLogsForkVm.sol";
@@ -100,7 +100,7 @@ contract LibRainDeployDescribedByMetaIsEmittedAtTest is Test {
         address described,
         bytes memory meta
     ) external {
-        Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](3);
+        VmSafe.EthGetLogs[] memory logs = new VmSafe.EthGetLogs[](3);
         logs[0] = LibMetaV1_2Log.log(metaBoard, sender, address(uint160(described) ^ 1), meta);
         logs[1] = LibMetaV1_2Log.log(metaBoard, sender, described, bytes.concat(meta, hex"00"));
         logs[2] = LibMetaV1_2Log.log(metaBoard, sender, described, meta);
