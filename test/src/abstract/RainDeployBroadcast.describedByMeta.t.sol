@@ -50,35 +50,43 @@ contract RainDeployBroadcastDescribedByMetaTest is Test {
         return deployed;
     }
 
+    /// The suite is read before `expectRevert`, which the read would otherwise consume.
+    function expectMetaBroadcastRefused(string[] memory networks, bytes memory refusal) internal {
+        DeploySuite memory suite = sDeploy.describedSuite(SUITE, META);
+        vm.expectRevert(refusal);
+        broadcast(suite, networks);
+    }
+
     function testASuiteCarryingAMetaWithNoMetaBoardIsRefusedBeforeAnyFork() external {
         sDeploy.setMetaBoard(address(0));
-        vm.expectRevert(abi.encodeWithSelector(MetaBoardUndeclared.selector, SUITE));
-        broadcast(sDeploy.describedSuite(SUITE, META), sDeploy.arbitrumAndPolygon());
+        expectMetaBroadcastRefused(
+            sDeploy.arbitrumAndPolygon(), abi.encodeWithSelector(MetaBoardUndeclared.selector, SUITE)
+        );
         assertFalse(anyForkExists());
     }
 
     function testTheFirstNetworkIsCheckedAtItsOwnChainsDeclaredBlock() external {
         declareBothBlocks();
-        vm.expectRevert(
+        expectMetaBroadcastRefused(
+            sDeploy.arbitrumAndPolygon(),
             abi.encodeWithSelector(DescribedByMetaNotEmittedAt.selector, SUITE, ARBITRUM_CHAIN_ID, ARBITRUM_BLOCK)
         );
-        broadcast(sDeploy.describedSuite(SUITE, META), sDeploy.arbitrumAndPolygon());
     }
 
     function testTheFirstNetworkReversedIsCheckedAtItsOwnChainsDeclaredBlock() external {
         declareBothBlocks();
-        vm.expectRevert(
+        expectMetaBroadcastRefused(
+            polygonAndArbitrum(),
             abi.encodeWithSelector(DescribedByMetaNotEmittedAt.selector, SUITE, POLYGON_CHAIN_ID, POLYGON_BLOCK)
         );
-        broadcast(sDeploy.describedSuite(SUITE, META), polygonAndArbitrum());
     }
 
     function testTheSecondNetworkIsCheckedAtItsOwnChainsDeclaredBlockAfterTheFirstEmits() external {
         sDeploy.declareEmission(SUITE, POLYGON_CHAIN_ID, POLYGON_BLOCK);
-        vm.expectRevert(
+        expectMetaBroadcastRefused(
+            sDeploy.arbitrumAndPolygon(),
             abi.encodeWithSelector(DescribedByMetaNotEmittedAt.selector, SUITE, POLYGON_CHAIN_ID, POLYGON_BLOCK)
         );
-        broadcast(sDeploy.describedSuite(SUITE, META), sDeploy.arbitrumAndPolygon());
     }
 
     function testEachUndeclaredNetworkEmitsOnItsOwnChainAsTheDeployer() external {
