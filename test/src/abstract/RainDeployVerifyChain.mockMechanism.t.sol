@@ -288,6 +288,7 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
             bytes memory data = accesses[i].data;
             if (
                 accesses[i].account == address(sForkVm) && accesses[i].kind == VmSafe.AccountAccessKind.Call
+                    // forge-lint: disable-next-line(unsafe-typecast)
                     && data.length >= 4 && bytes4(data) == LocalForkVm.createFork.selector
             ) {
                 calls[count++] = data;
