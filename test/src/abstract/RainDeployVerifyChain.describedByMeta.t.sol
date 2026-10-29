@@ -13,6 +13,7 @@ import {
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {
     DescribedByMetaEmissionUndeclared,
+    DescribedByMetaMismatch,
     DescribedByMetaNotEmittedAt,
     MetaBoardUndeclared
 } from "../../../src/lib/LibRainDeployDescribedByMeta.sol";
@@ -26,7 +27,8 @@ import {LibMetaV1_2Log} from "../../lib/LibMetaV1_2Log.sol";
 
 /// @title RainDeployVerifyChainDescribedByMetaTest
 /// @notice The chain group refuses a suite carrying a described-by meta without a declared metaboard before forking,
-/// and on each network the suite is required on checks the emission at the block declared for that network's chain.
+/// and on each network the suite is required on checks the emission at the block declared for that network's chain and
+/// the live deployment's `describedByMetaV1()`.
 contract RainDeployVerifyChainDescribedByMetaTest is RainDeployVerifyChain {
     uint256 constant ARBITRUM_CHAIN_ID = 42161;
     uint256 constant POLYGON_CHAIN_ID = 137;
@@ -39,7 +41,7 @@ contract RainDeployVerifyChainDescribedByMetaTest is RainDeployVerifyChain {
         sForkVm = new LocalLogsForkVm();
         sMetaBoard = makeAddr("metaboard");
         vm.etch(sMetaBoard, hex"00");
-        vm.etch(described(), type(MockDescribedByMeta).runtimeCode);
+        LibRainDeploy.etchAndDeployZoltu(vm, creationCode());
     }
 
     function declaration() internal view override returns (DeployDeclaration memory) {
@@ -186,5 +188,24 @@ contract RainDeployVerifyChainDescribedByMetaTest is RainDeployVerifyChain {
         suite.networks = new string[](1);
         suite.networks[0] = LibRainDeploy.ARBITRUM_ONE;
         this.checkSuite(suite);
+    }
+
+    function testADeploymentAnsweringAnotherHashOnAForkIsRefused(
+        uint256 arbitrumBlock,
+        uint256 polygonBlock,
+        bytes32 answer
+    ) external {
+        vm.assume(answer != keccak256(meta()));
+        declare(ARBITRUM_CHAIN_ID, arbitrumBlock);
+        declare(POLYGON_CHAIN_ID, polygonBlock);
+        emitAt(ARBITRUM_CHAIN_ID, arbitrumBlock);
+        emitAt(POLYGON_CHAIN_ID, polygonBlock);
+        sForkVm.copyStorageOnSelect(POLYGON_CHAIN_ID, address(new MockDescribedByMeta(answer)), described());
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DescribedByMetaMismatch.selector, "described@0_0_1", described(), true, answer, keccak256(meta())
+            )
+        );
+        this.checkSuite(describedSuite());
     }
 }
