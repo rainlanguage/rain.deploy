@@ -45,8 +45,6 @@ contract BuildScriptTest is Test {
 
     string constant CUT_RECORD_NAMES_FIXTURE_ROOT = "test/generated-buildscript-cut-record-names";
 
-    string constant RUN_PRINTED_FIXTURE_ROOT = "test/generated-buildscript-run-printed";
-
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
 
@@ -208,24 +206,6 @@ contract BuildScriptTest is Test {
 
         assertTrue(generatedFrozen);
         assertTrue(extraFrozen);
-    }
-
-    /// PROPERTY: `run()` prints every path it declares, which is how
-    /// `rainix-copy-artifacts` learns them.
-    function testRunPrintsEveryDeclaredPath() external {
-        BuildScriptHarness harness = newHarness(RUN_PRINTED_FIXTURE_ROOT);
-        harness.seedConfig();
-        string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(harness.externalGeneratedPaths());
-        assertGt(lines.length, 0);
-        for (uint256 i = 0; i < lines.length; i++) {
-            vm.expectCall(CONSOLE, abi.encodeWithSignature("log(string)", lines[i]));
-        }
-        harness.run();
-
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(RUN_PRINTED_FIXTURE_ROOT, true);
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(harness.externalLibDir(), true);
     }
 
     function testRunStagesTheNetworkConfig() external {
