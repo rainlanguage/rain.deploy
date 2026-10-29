@@ -33,11 +33,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(d, vm, networks, suites);
     }
 
-    /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Each suite is
-    /// checked with its recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds
-    /// (`addCandidateNetworks`); the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s
-    /// refusals before any network is forked on each network it is required on, and `checkOnChain`'s on each
-    /// selected fork it is required on.
+    /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Every
+    /// mechanism's `checkNetworks` runs first, before the frozen checks, derivations and forks; with no suites only
+    /// the networks some mechanism returned are forked, and with none nothing is. Each suite is checked with its
+    /// recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds (`addCandidateNetworks`);
+    /// the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s refusals before any network
+    /// is forked on each network it is required on, and `checkOnChain`'s on each selected fork it is required on.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
