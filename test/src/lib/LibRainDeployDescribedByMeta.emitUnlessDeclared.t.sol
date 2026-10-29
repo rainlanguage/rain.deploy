@@ -13,6 +13,7 @@ import {
     LibRainDeployDescribedByMeta,
     MetaBoardNotDeployed
 } from "../../../src/lib/LibRainDeployDescribedByMeta.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {LocalLogsForkVm} from "../../concrete/LocalLogsForkVm.sol";
 import {MockDescribedByMeta} from "../../concrete/MockDescribedByMeta.sol";
 import {
@@ -72,7 +73,7 @@ contract LibRainDeployDescribedByMetaEmitUnlessDeclaredTest is Test {
         e.meta = "";
         LocalLogsForkVm logsVm = new LocalLogsForkVm();
         vm.expectCall(address(logsVm), abi.encodeWithSelector(VmSafe.eth_getLogs.selector), 0);
-        vm.expectCall(address(logsVm), abi.encodeWithSelector(LocalLogsForkVm.startBroadcast.selector), 0);
+        vm.expectCall(address(logsVm), abi.encodeWithSelector(LocalForkVm.startBroadcast.selector), 0);
         this.externalEmitUnlessDeclared(Vm(address(logsVm)), e);
     }
 
