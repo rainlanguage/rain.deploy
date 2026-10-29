@@ -97,8 +97,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         checkDescribedByMeta(d, suite);
     }
 
-    /// A suite carrying a described-by meta MUST name a `metaBoard()`, and its local deployment MUST answer
-    /// `describedByMetaV1()` with the meta's hash.
+    /// A suite carrying a described-by meta MUST name a `metaBoard()`, and every nonzero address its local deployment
+    /// returns MUST answer `describedByMetaV1()` with the meta's hash.
     /// @param d The declaration.
     /// @param suite The suite to check.
     function checkDescribedByMeta(DeployDeclaration memory d, DeploySuite memory suite) internal {
@@ -108,7 +108,11 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
         uint256 snapshotId = vm.snapshotState();
         address[] memory deployed = deployLocally(d, vm, suite);
-        LibRainDeployDescribedByMeta.checkDescribes(suite.suite, deployed[0], suite.describedByMeta);
+        for (uint256 i = 0; i < deployed.length; i++) {
+            if (deployed[i] != address(0)) {
+                LibRainDeployDescribedByMeta.checkDescribes(suite.suite, deployed[i], suite.describedByMeta);
+            }
+        }
         if (!vm.revertToState(snapshotId)) {
             revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
         }
