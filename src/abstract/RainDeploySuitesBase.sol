@@ -428,13 +428,16 @@ abstract contract RainDeploySuitesBase {
         returns (bool, uint256)
     {
         bytes32 suiteHash = keccak256(bytes(suite));
-        for (uint256 i = 0; i < d.describedByMetaEmissions.length; i++) {
+        uint256 length = d.describedByMetaEmissions.length;
+        uint256 i = 0;
+        for (; i < length; i++) {
             DescribedByMetaEmission memory emission = d.describedByMetaEmissions[i];
             if (emission.chainId == chainId && keccak256(bytes(emission.suite)) == suiteHash) {
-                return (true, emission.blockNumber);
+                break;
             }
         }
-        return (false, 0);
+        bool found = i < length;
+        return (found, found ? d.describedByMetaEmissions[i].blockNumber : 0);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
