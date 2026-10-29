@@ -22,6 +22,8 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
 
     bytes internal sRetired;
 
+    string[] internal sOwnPaths;
+
     /// @param root The record root, also the config root.
     /// @param libDirectory The directory the libs are written into.
     constructor(string memory root, string memory libDirectory) {
@@ -39,6 +41,11 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
         sCandidates = candidates;
         sGenerated = generated;
         sRetired = retired;
+    }
+
+    /// @param paths What `buildGeneratedPaths` returns.
+    function declareOwnPaths(string[] memory paths) external {
+        sOwnPaths = paths;
     }
 
     function declaration() internal view override returns (DeployDeclaration memory) {
@@ -63,6 +70,11 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
     function regenerateSnapshots() internal override {}
 
     /// @inheritdoc BuildScript
+    function buildGeneratedPaths() internal view override returns (string[] memory) {
+        return sOwnPaths;
+    }
+
+    /// @inheritdoc BuildScript
     function recordRoot() internal view override returns (string memory) {
         return sRoot;
     }
@@ -79,6 +91,15 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
 
     function externalSnapshotContractNames() external view returns (string[] memory) {
         return snapshotContractNames(checkedGeneratedContracts(declaration()));
+    }
+
+    function externalGeneratedPaths() external view returns (string[] memory) {
+        DeployDeclaration memory d = declaration();
+        return generatedPaths(d, checkedGeneratedContracts(d));
+    }
+
+    function externalDeclaredCandidate(string memory suite) external view returns (DeployCandidate memory) {
+        return declaredCandidate(declaration(), suite);
     }
 
     function externalRegenerateLibs() external {

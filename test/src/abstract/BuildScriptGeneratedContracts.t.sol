@@ -17,15 +17,20 @@ import {
     DeployCandidate,
     DeployDependency,
     DeploySuite,
-    DuplicateDeploySuite
+    DuplicateDeploySuite,
+    NoDeployCandidates
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {GeneratedContractsBuildScriptHarness} from "../../concrete/GeneratedContractsBuildScriptHarness.sol";
 
 contract BuildScriptGeneratedContractsTest is Test {
     string constant ROOT = "test/generated-buildscript-generated-contracts";
+
+    /// A committed record holding `AddressRegistry` releases.
+    string constant ZOLTU_RECORD_ROOT = "test/fixture-zoltu-record";
 
     /// Networks named, so the declaration adds the candidate as the test built it.
     function suite(string memory key, string memory artifactPath) internal pure returns (DeploySuite memory) {
@@ -271,5 +276,68 @@ contract BuildScriptGeneratedContractsTest is Test {
         assertTrue(vm.contains(aggregate, "released[0] = LibRReleased.releasedSuites();"));
         assertTrue(vm.contains(aggregate, "released[1] = LibAReleased.releasedSuites();"));
         assertTrue(vm.contains(aggregate, "released[2] = LibBReleased.releasedSuites();"));
+    }
+
+    function testRefusesADeclarationWithNoCandidates() external {
+        GeneratedContractsBuildScriptHarness harness =
+            harnessDeclaring(new DeployCandidate[](0), new GeneratedContract[](0), noRetired());
+        vm.expectRevert(abi.encodeWithSelector(NoDeployCandidates.selector));
+        harness.externalSnapshotContractNames();
+    }
+
+    function testDeclaredCandidateOfAnUndeclaredKeyIsRefusedUnderThatKey() external {
+        GeneratedContractsBuildScriptHarness harness =
+            harnessDeclaring(one(anchored("a", "A")), new GeneratedContract[](0), noRetired());
+        DeployCandidate memory undeclared = harness.externalDeclaredCandidate("b");
+        harness.declare(
+            abi.encode(one(anchored("a", "A"))),
+            abi.encode(two(generated("A", "", anchored("a", "A")), generated("B", "", undeclared))),
+            abi.encode(noRetired())
+        );
+        vm.expectRevert(abi.encodeWithSelector(GeneratedContractNotDeclared.selector, "B", "b"));
+        harness.externalSnapshotContractNames();
+    }
+
+    function testGeneratedPathsEndWithTheRepoOwnPaths() external {
+        GeneratedContractsBuildScriptHarness harness =
+            harnessDeclaring(one(anchored("a", "A")), one(generated("A", "", anchored("a", "A"))), noRetired());
+        string[] memory own = new string[](2);
+        own[0] = "src/lib/LibOwnOne.sol";
+        own[1] = "src/lib/LibOwnTwo.sol";
+        harness.declareOwnPaths(own);
+
+        string[] memory paths = harness.externalGeneratedPaths();
+
+        assertGt(paths.length, 3);
+        assertEq(paths[paths.length - 3], LibRainDeployConfig.ENV_EXAMPLE_NAME);
+        assertEq(paths[paths.length - 2], own[0]);
+        assertEq(paths[paths.length - 1], own[1]);
+    }
+
+    function testRegenerateLibsWritesEachRetiredLibFromItsOwnTemplate() external {
+        string memory dir = "fixture-lib/buildscript-generated-contracts-retired-templates";
+        if (vm.exists(dir)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(dir, true);
+        }
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(dir, true);
+        RetiredContract[] memory retiredList = new RetiredContract[](2);
+        retiredList[0] = retired("Other");
+        retiredList[1] = retired("AddressRegistry");
+        GeneratedContractsBuildScriptHarness harness = new GeneratedContractsBuildScriptHarness(ZOLTU_RECORD_ROOT, dir);
+        harness.declare(
+            abi.encode(one(anchored("a", "A"))),
+            abi.encode(one(generated("A", "", anchored("a", "A")))),
+            abi.encode(retiredList)
+        );
+        harness.externalRegenerateLibs();
+
+        string memory released = vm.readFile(LibRainDeploySnapshot.pathForLib(dir, "LibAddressRegistryReleased"));
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(dir, true);
+
+        assertTrue(vm.contains(released, "suite: \"retired-AddressRegistry@"));
+        assertFalse(vm.contains(released, "retired-Other"));
     }
 }

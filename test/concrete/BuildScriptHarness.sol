@@ -39,6 +39,10 @@ contract BuildScriptHarness is BuildScript {
     /// the one every other test here drives.
     string[] internal sNetworks;
 
+    /// A rolling snapshot the release freezes beside the generated contract's,
+    /// or empty for none.
+    string internal sExtraRecord;
+
     /// @param root The fixture record root, or empty for `BuildScript`'s own.
     constructor(string memory root) {
         sRoot = root;
@@ -53,6 +57,12 @@ contract BuildScriptHarness is BuildScript {
     /// @param networks The network names to declare.
     function declareNetworks(string[] memory networks) external {
         sNetworks = networks;
+    }
+
+    /// @param name A rolling snapshot `regenerateSnapshots` also writes and
+    /// `releaseRecordNames` also names.
+    function declareExtraRecord(string memory name) external {
+        sExtraRecord = name;
     }
 
     function declaration() internal view override returns (DeployDeclaration memory) {
@@ -241,6 +251,42 @@ contract BuildScriptHarness is BuildScript {
             type(MockDeployableV2).creationCode,
             new DeployDependency[](0)
         );
+        if (bytes(sExtraRecord).length > 0) {
+            LibRainDeploySnapshot.writeSnapshot(
+                vm,
+                recordRoot(),
+                LibRainDeploySnapshot.CANDIDATE,
+                sExtraRecord,
+                type(MockDeployableV2).creationCode,
+                new DeployDependency[](0)
+            );
+        }
+    }
+
+    /// @inheritdoc BuildScript
+    function releaseRecordNames(DeployDeclaration memory d, GeneratedContract[] memory generated)
+        internal
+        view
+        override
+        returns (string[] memory)
+    {
+        string[] memory names = super.releaseRecordNames(d, generated);
+        if (bytes(sExtraRecord).length == 0) {
+            return names;
+        }
+        string[] memory extended = new string[](names.length + 1);
+        for (uint256 i = 0; i < names.length; i++) {
+            extended[i] = names[i];
+        }
+        extended[names.length] = sExtraRecord;
+        return extended;
+    }
+
+    /// Where the release freezes `name`'s rolling snapshot to.
+    /// @param name The snapshot name.
+    /// @return The frozen snapshot path.
+    function frozenPathOf(string memory name) external view returns (string memory) {
+        return LibRainDeploySnapshot.pathForSnapshot(recordRoot(), LibRainDeploySnapshot.deployTag(vm), name);
     }
 
     /// Writes a fixture file, creating the directories above it.

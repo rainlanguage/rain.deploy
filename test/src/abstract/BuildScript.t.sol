@@ -43,6 +43,10 @@ contract BuildScriptTest is Test {
     /// is midway through reading.
     string constant CUT_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-cut-config";
 
+    string constant CUT_RECORD_NAMES_FIXTURE_ROOT = "test/generated-buildscript-cut-record-names";
+
+    string constant RUN_PRINTED_FIXTURE_ROOT = "test/generated-buildscript-run-printed";
+
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
 
@@ -184,6 +188,44 @@ contract BuildScriptTest is Test {
                 released, string.concat("suite: \"harness-candidate@", LibRainDeploySnapshot.deployTag(vm), "\"")
             )
         );
+    }
+
+    /// PROPERTY: `cutRelease()` freezes every `releaseRecordNames` snapshot,
+    /// not only the generated contracts'.
+    function testCutReleaseFreezesEveryReleaseRecordName() external {
+        BuildScriptHarness harness = newHarness(CUT_RECORD_NAMES_FIXTURE_ROOT);
+        harness.declareExtraRecord("ExtraRecord");
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        bool generatedFrozen = vm.exists(harness.frozenPath());
+        bool extraFrozen = vm.exists(harness.frozenPathOf("ExtraRecord"));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CUT_RECORD_NAMES_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
+
+        assertTrue(generatedFrozen);
+        assertTrue(extraFrozen);
+    }
+
+    /// PROPERTY: `run()` prints every path it declares, which is how
+    /// `rainix-copy-artifacts` learns them.
+    function testRunPrintsEveryDeclaredPath() external {
+        BuildScriptHarness harness = newHarness(RUN_PRINTED_FIXTURE_ROOT);
+        harness.seedConfig();
+        string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(harness.externalGeneratedPaths());
+        assertGt(lines.length, 0);
+        for (uint256 i = 0; i < lines.length; i++) {
+            vm.expectCall(CONSOLE, abi.encodeWithSignature("log(string)", lines[i]));
+        }
+        harness.run();
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RUN_PRINTED_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
     }
 
     function testRunStagesTheNetworkConfig() external {
