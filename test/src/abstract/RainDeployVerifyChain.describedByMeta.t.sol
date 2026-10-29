@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {
+    DeployCandidate,
     DeployDeclaration,
     DeployDependency,
     DeploySuite,
@@ -46,6 +47,7 @@ contract RainDeployVerifyChainDescribedByMetaTest is RainDeployVerifyChain {
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.setNetworks(d, bothNetworks());
+        LibRainDeployDeclaration.addCandidates(d, candidates());
         d.metaBoard = sMetaBoard;
         d.describedByMetaEmissions = sEmissions;
         return d;
@@ -83,6 +85,14 @@ contract RainDeployVerifyChainDescribedByMetaTest is RainDeployVerifyChain {
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
             describedByMeta: meta()
         });
+    }
+
+    function candidates() internal pure returns (DeployCandidate[] memory) {
+        DeploySuite memory candidate = describedSuite();
+        candidate.suite = "described";
+        DeployCandidate[] memory declared = new DeployCandidate[](1);
+        declared[0] = DeployCandidate({snapshot: candidate, unanchorableReason: ""});
+        return declared;
     }
 
     function declare(uint256 chainId, uint256 blockNumber) internal {
