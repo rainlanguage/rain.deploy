@@ -270,6 +270,16 @@ struct DeployDeclaration {
     /// The metaboard every suite's `describedByMeta` is emitted on and checked against, on every network. Zero
     /// unless declared; a declaration with a suite carrying a described-by meta MUST name one.
     address metaBoard;
+    /// The block each suite's `describedByMeta` was emitted on `metaBoard` in, per chain. Empty unless declared; the
+    /// broadcast emits where none is declared and the chain group refuses a suite carrying a meta with none.
+    DescribedByMetaEmission[] describedByMetaEmissions;
+}
+
+/// The block a suite's described-by meta was emitted in on a chain.
+struct DescribedByMetaEmission {
+    string suite;
+    uint256 chainId;
+    uint256 blockNumber;
 }
 
 /// A deterministic deployment outside the repo that a suite may reach.
@@ -404,6 +414,27 @@ abstract contract RainDeploySuitesBase {
             revert MetaBoardUndeclared(suite.suite);
         }
         return d.metaBoard;
+    }
+
+    /// The block `d` declares `suite`'s described-by meta was emitted in on `chainId`.
+    /// @param d The declaration.
+    /// @param suite The suite.
+    /// @param chainId The chain.
+    /// @return Whether `d` declares one.
+    /// @return The block, zero when none is declared.
+    function describedByMetaEmissionBlock(DeployDeclaration memory d, string memory suite, uint256 chainId)
+        internal
+        pure
+        returns (bool, uint256)
+    {
+        bytes32 suiteHash = keccak256(bytes(suite));
+        for (uint256 i = 0; i < d.describedByMetaEmissions.length; i++) {
+            DescribedByMetaEmission memory emission = d.describedByMetaEmissions[i];
+            if (emission.chainId == chainId && keccak256(bytes(emission.suite)) == suiteHash) {
+                return (true, emission.blockNumber);
+            }
+        }
+        return (false, 0);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data

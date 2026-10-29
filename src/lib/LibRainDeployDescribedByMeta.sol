@@ -28,29 +28,40 @@ error DescribedByMetaMismatch(
     string suite, address described, bool answered, bytes32 describedByMetaHash, bytes32 metaHash
 );
 
-/// @notice The metaboard MUST hold an emission of a suite's described-by meta about its deployment on every network
-/// the suite is required on.
+/// @notice The block a declaration names as a suite's described-by meta emission on a chain MUST hold that emission
+/// on the metaboard.
+/// @param suite The suite.
+/// @param chainId The chain.
+/// @param blockNumber The declared emission block.
+error DescribedByMetaNotEmittedAt(string suite, uint256 chainId, uint256 blockNumber);
+
+/// @notice A suite carrying a described-by meta MUST have its emission block declared for every chain it is checked
+/// on.
 /// @param network The network.
 /// @param suite The suite.
-/// @param described The suite's address on the network.
-error DescribedByMetaNotEmitted(string network, string suite, address described);
+/// @param chainId The chain.
+error DescribedByMetaEmissionUndeclared(string network, string suite, uint256 chainId);
 
 /// @title LibRainDeployDescribedByMeta
-/// @notice A suite's described-by meta on the metaboard: the emission `RainDeployBroadcast` makes, and the lookup that
-/// makes it idempotent and that the chain group checks.
+/// @notice A suite's described-by meta on the metaboard: the emission `RainDeployBroadcast` makes, and the one-block
+/// lookup at its declared emission block that the broadcast and the chain group make.
 library LibRainDeployDescribedByMeta {
-    /// Whether the selected fork's metaboard holds a `MetaV1_2` about `described` carrying exactly `meta`, from any
-    /// sender, at any block up to the fork's. Reads the fork's endpoint, so emissions made on the fork since it was
-    /// created are not seen.
+    /// Whether block `blockNumber` of the selected fork's chain holds a `MetaV1_2` on `metaBoard` about `described`
+    /// carrying exactly `meta`, from any sender.
     /// @param vm The Vm instance to read logs with.
     /// @param metaBoard The metaboard.
+    /// @param blockNumber The block to read.
     /// @param described The subject.
     /// @param meta The meta.
-    /// @return True if the metaboard holds the emission.
-    function isEmitted(Vm vm, address metaBoard, address described, bytes memory meta) internal view returns (bool) {
+    /// @return True if the block holds the emission.
+    function isEmittedAt(Vm vm, address metaBoard, uint256 blockNumber, address described, bytes memory meta)
+        internal
+        view
+        returns (bool)
+    {
         bytes32[] memory topics = new bytes32[](1);
         topics[0] = IMetaV1_2.MetaV1_2.selector;
-        Vm.EthGetLogs[] memory logs = vm.eth_getLogs(0, vm.getBlockNumber(), metaBoard, topics);
+        Vm.EthGetLogs[] memory logs = vm.eth_getLogs(blockNumber, blockNumber, metaBoard, topics);
         bytes32 subject = bytes32(uint256(uint160(described)));
         bytes32 metaHash = keccak256(meta);
         for (uint256 i = 0; i < logs.length; i++) {
@@ -71,20 +82,27 @@ library LibRainDeployDescribedByMeta {
         }
     }
 
-    /// On the selected fork, broadcasts `meta` about `described` on `metaBoard` as `deployer`, unless the metaboard
-    /// already holds that emission, once `checkDescribes` holds. Nothing for an empty `meta`.
+    /// On the selected fork, for a non-empty `meta`: with an emission block declared, refuses
+    /// `DescribedByMetaNotEmittedAt` unless that block holds the emission; with none declared, broadcasts `meta` about
+    /// `described` on `metaBoard` as `deployer` once `checkDescribes` holds, and logs what to declare.
     /// @param vm The Vm instance to read logs and broadcast with.
-    /// @param suite The suite, for the refusal.
+    /// @param suite The suite.
     /// @param network The network, for the refusal and the log.
+    /// @param chainId The chain.
     /// @param metaBoard The metaboard.
+    /// @param declared Whether an emission block is declared for the suite on the chain.
+    /// @param blockNumber The declared emission block.
     /// @param described The deployment the meta describes.
     /// @param meta The described-by meta.
     /// @param deployer The address to broadcast as.
-    function emitUnlessEmitted(
+    function emitUnlessDeclared(
         Vm vm,
         string memory suite,
         string memory network,
+        uint256 chainId,
         address metaBoard,
+        bool declared,
+        uint256 blockNumber,
         address described,
         bytes memory meta,
         address deployer
@@ -93,8 +111,11 @@ library LibRainDeployDescribedByMeta {
             return;
         }
         checkMetaBoardDeployed(network, metaBoard);
-        if (isEmitted(vm, metaBoard, described, meta)) {
-            console2.log(" - Described-by meta already emitted, skipping:", network);
+        if (declared) {
+            if (!isEmittedAt(vm, metaBoard, blockNumber, described, meta)) {
+                revert DescribedByMetaNotEmittedAt(suite, chainId, blockNumber);
+            }
+            console2.log(" - Described-by meta emitted at its declared block, skipping:", network, blockNumber);
             return;
         }
         checkDescribes(suite, described, meta);
@@ -102,30 +123,42 @@ library LibRainDeployDescribedByMeta {
         vm.startBroadcast(deployer);
         IMetaBoardV1_2(metaBoard).emitMeta(bytes32(uint256(uint160(described))), meta);
         vm.stopBroadcast();
+        console2.log(" - Declare the emitMeta receipt's blockNumber as the emission block of suite on chain id:");
+        console2.log(suite, chainId);
     }
 
-    /// Refuses `DescribedByMetaNotEmitted` when the selected fork's metaboard holds no emission of a non-empty `meta`
-    /// about `described`, and `MetaBoardNotDeployed` when it has no metaboard.
+    /// For a non-empty `meta`, refuses `DescribedByMetaEmissionUndeclared` when no emission block is declared,
+    /// `MetaBoardNotDeployed` when the selected fork has no metaboard, and `DescribedByMetaNotEmittedAt` when the
+    /// declared block holds no emission of `meta` about `described`.
     /// @param vm The Vm instance to read logs with.
     /// @param network The network, for the refusal.
     /// @param suite The suite, for the refusal.
+    /// @param chainId The chain.
     /// @param metaBoard The metaboard.
+    /// @param declared Whether an emission block is declared for the suite on the chain.
+    /// @param blockNumber The declared emission block.
     /// @param described The suite's address on the network.
     /// @param meta The described-by meta.
-    function checkEmitted(
+    function checkEmittedAt(
         Vm vm,
         string memory network,
         string memory suite,
+        uint256 chainId,
         address metaBoard,
+        bool declared,
+        uint256 blockNumber,
         address described,
         bytes memory meta
     ) internal view {
         if (meta.length == 0) {
             return;
         }
+        if (!declared) {
+            revert DescribedByMetaEmissionUndeclared(network, suite, chainId);
+        }
         checkMetaBoardDeployed(network, metaBoard);
-        if (!isEmitted(vm, metaBoard, described, meta)) {
-            revert DescribedByMetaNotEmitted(network, suite, described);
+        if (!isEmittedAt(vm, metaBoard, blockNumber, described, meta)) {
+            revert DescribedByMetaNotEmittedAt(suite, chainId, blockNumber);
         }
     }
 

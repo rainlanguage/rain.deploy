@@ -13,6 +13,7 @@ import {
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
@@ -87,6 +88,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// locally, with only its declared dependencies etched, under each chain id that check reads), then broadcasts the
     /// selected suite by ITS mechanism, through the mechanism hooks — the same dispatch every verification group
     /// derives through, so what is broadcast is what was verified. `suite` is not changed.
+    /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before any fork, and once deployed on
+    /// each network is skipped where its declared emission block holds the emission, refused where that block does
+    /// not, and emitted where no block is declared.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `d.deployNetworks` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
@@ -112,7 +116,30 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             checkBroadcastSeat(d, seated, targets[i], deployer);
         }
         checkSeatsNoDeployKey(d, seated, targets, deployer);
-        return deployAndBroadcast(d, vm, networks, deployerPrivateKey, frozen, candidate);
+        address board = checkedMetaBoard(d, frozen);
+        (address[] memory deployed, uint256[] memory forkIds) =
+            deployAndBroadcast(d, vm, networks, deployerPrivateKey, frozen, candidate);
+        if (frozen.describedByMeta.length != 0) {
+            SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+            for (uint256 i = 0; i < networks.length; i++) {
+                vm.selectFork(forkIds[i]);
+                (bool declared, uint256 blockNumber) =
+                    describedByMetaEmissionBlock(d, frozen.suite, configs[i].chainId);
+                LibRainDeployDescribedByMeta.emitUnlessDeclared(
+                    vm,
+                    frozen.suite,
+                    networks[i],
+                    configs[i].chainId,
+                    board,
+                    declared,
+                    blockNumber,
+                    deployed[i],
+                    frozen.describedByMeta,
+                    deployer
+                );
+            }
+        }
+        return (deployed, forkIds);
     }
 
     /// Broadcasts `frozen`, with every network in play its candidate adds, to each of `networks` by its mechanism,
