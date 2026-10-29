@@ -48,15 +48,17 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         SupportedNetwork[] memory networks,
         DeploySuite[] memory suites
     ) internal {
-        uint256[][] memory needed = new uint256[][](d.mechanisms.length);
-        for (uint256 k = 0; k < d.mechanisms.length; k++) {
-            needed[k] = d.mechanisms[k].checkNetworks(d, networks);
-        }
-        // Nothing to check is not a reason to touch every RPC endpoint.
-        if (suites.length == 0) {
-            networks = networksNeeded(networks, needed);
-            if (networks.length == 0) {
-                return;
+        {
+            uint256[][] memory needed = new uint256[][](d.mechanisms.length);
+            for (uint256 k = 0; k < d.mechanisms.length; k++) {
+                needed[k] = d.mechanisms[k].checkNetworks(d, networks);
+            }
+            // Nothing to check is not a reason to touch every RPC endpoint.
+            if (suites.length == 0) {
+                networks = networksNeeded(networks, needed);
+                if (networks.length == 0) {
+                    return;
+                }
             }
         }
         // With no networks every suite is required nowhere, which would name a suite for what is a fault of the
