@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {LocalForkVm} from "./LocalForkVm.sol";
 
 /// @title LocalLogsForkVm
@@ -39,6 +39,6 @@ contract LocalLogsForkVm is LocalForkVm {
         if (logs.length == 0) {
             return new Vm.EthGetLogs[](0);
         }
-        return abi.decode(logs, (Vm.EthGetLogs[]));
+        return abi.decode(logs, (VmSafe.EthGetLogs[]));
     }
 }
