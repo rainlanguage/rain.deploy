@@ -87,7 +87,7 @@ contract LibRainDeployDescribedByMetaIsEmittedAtTest is Test {
         );
         vm.expectCall(
             address(sLogsVm),
-            abi.encodeCall(Vm.eth_getLogs, (blockNumber, blockNumber, metaBoard, LibMetaV1_2Log.topics())),
+            abi.encodeCall(VmSafe.eth_getLogs, (blockNumber, blockNumber, metaBoard, LibMetaV1_2Log.topics())),
             1
         );
         assertTrue(isEmittedLocallyAt(metaBoard, blockNumber, described, meta));

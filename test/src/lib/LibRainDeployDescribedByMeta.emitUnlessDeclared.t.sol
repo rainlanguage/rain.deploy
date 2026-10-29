@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {IMetaBoardV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaBoardV1_2.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -71,7 +71,7 @@ contract LibRainDeployDescribedByMetaEmitUnlessDeclaredTest is Test {
     function testAnEmptyMetaReadsAndBroadcastsNothing(EmitUnlessDeclaredCall memory e) external {
         e.meta = "";
         LocalLogsForkVm logsVm = new LocalLogsForkVm();
-        vm.expectCall(address(logsVm), abi.encodeWithSelector(Vm.eth_getLogs.selector), 0);
+        vm.expectCall(address(logsVm), abi.encodeWithSelector(VmSafe.eth_getLogs.selector), 0);
         vm.expectCall(address(logsVm), abi.encodeWithSelector(LocalLogsForkVm.startBroadcast.selector), 0);
         this.externalEmitUnlessDeclared(Vm(address(logsVm)), e);
     }

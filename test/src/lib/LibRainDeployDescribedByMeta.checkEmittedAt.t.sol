@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     DescribedByMetaEmissionUndeclared,
@@ -62,7 +62,7 @@ contract LibRainDeployDescribedByMetaCheckEmittedAtTest is Test {
     function testAnEmptyMetaChecksNothing(CheckEmittedAtCall memory c) external {
         c.meta = "";
         LocalLogsForkVm logsVm = new LocalLogsForkVm();
-        vm.expectCall(address(logsVm), abi.encodeWithSelector(Vm.eth_getLogs.selector), 0);
+        vm.expectCall(address(logsVm), abi.encodeWithSelector(VmSafe.eth_getLogs.selector), 0);
         this.externalCheckEmittedAt(Vm(address(logsVm)), c);
     }
 

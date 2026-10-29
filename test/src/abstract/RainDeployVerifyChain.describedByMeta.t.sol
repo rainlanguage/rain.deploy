@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {
     DeployDeclaration,
     DeployDependency,
@@ -144,12 +144,12 @@ contract RainDeployVerifyChainDescribedByMetaTest is RainDeployVerifyChain {
         emitAt(POLYGON_CHAIN_ID, polygonBlock);
         vm.expectCall(
             address(sForkVm),
-            abi.encodeCall(Vm.eth_getLogs, (arbitrumBlock, arbitrumBlock, sMetaBoard, LibMetaV1_2Log.topics())),
+            abi.encodeCall(VmSafe.eth_getLogs, (arbitrumBlock, arbitrumBlock, sMetaBoard, LibMetaV1_2Log.topics())),
             1
         );
         vm.expectCall(
             address(sForkVm),
-            abi.encodeCall(Vm.eth_getLogs, (polygonBlock, polygonBlock, sMetaBoard, LibMetaV1_2Log.topics())),
+            abi.encodeCall(VmSafe.eth_getLogs, (polygonBlock, polygonBlock, sMetaBoard, LibMetaV1_2Log.topics())),
             1
         );
         this.checkSuite(describedSuite());
