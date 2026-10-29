@@ -33,11 +33,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(d, vm, networks, suites);
     }
 
-    /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Each suite is
-    /// checked with its recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds
-    /// (`addCandidateNetworks`); the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s
-    /// refusals before any network is forked on each network it is required on, and `checkOnChain`'s on each
-    /// selected fork it is required on.
+    /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Every
+    /// mechanism's `checkNetworks` runs first, before the frozen checks, derivations and forks; with no suites only
+    /// the networks some mechanism returned are forked, and with none nothing is. Each suite is checked with its
+    /// recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds (`addCandidateNetworks`);
+    /// the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s refusals before any network
+    /// is forked on each network it is required on, and `checkOnChain`'s on each selected fork it is required on.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -47,17 +48,17 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         SupportedNetwork[] memory networks,
         DeploySuite[] memory suites
     ) internal {
-        // Nothing to check is not a reason to touch every RPC endpoint.
-        if (suites.length == 0) {
-            bool configured = false;
+        {
+            uint256[][] memory needed = new uint256[][](d.mechanisms.length);
             for (uint256 k = 0; k < d.mechanisms.length; k++) {
-                if (d.mechanisms[k].config.length > 0) {
-                    configured = true;
-                    break;
-                }
+                needed[k] = d.mechanisms[k].checkNetworks(d, networks);
             }
-            if (!configured) {
-                return;
+            // Nothing to check is not a reason to touch every RPC endpoint.
+            if (suites.length == 0) {
+                networks = networksNeeded(networks, needed);
+                if (networks.length == 0) {
+                    return;
+                }
             }
         }
         // With no networks every suite is required nowhere, which would name a suite for what is a fault of the
@@ -118,6 +119,37 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 checkOnChain(d, suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
             }
         }
+    }
+
+    /// @param networks The networks.
+    /// @param needed The chain ids each mechanism's `checkNetworks` returned.
+    /// @return The networks whose chain id is in some `needed`, in `networks` order.
+    function networksNeeded(SupportedNetwork[] memory networks, uint256[][] memory needed)
+        internal
+        pure
+        returns (SupportedNetwork[] memory)
+    {
+        bool[] memory keep = new bool[](networks.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < networks.length; i++) {
+            for (uint256 k = 0; k < needed.length && !keep[i]; k++) {
+                for (uint256 m = 0; m < needed[k].length; m++) {
+                    if (needed[k][m] == networks[i].chainId) {
+                        keep[i] = true;
+                        count++;
+                        break;
+                    }
+                }
+            }
+        }
+        SupportedNetwork[] memory kept = new SupportedNetwork[](count);
+        uint256 n = 0;
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (keep[i]) {
+                kept[n++] = networks[i];
+            }
+        }
+        return kept;
     }
 
     /// The selected fork MUST hold `suite` at `deployedAddress` with its derived code and its declared dependencies.

@@ -127,6 +127,30 @@ import {
     DEPENDENCIES as MigrationRegistry_0_1_26_DEPENDENCIES
 } from "../generated/0_1_26/MigrationRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as MigrationRegistry_0_1_27_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as MigrationRegistry_0_1_27_BYTECODE_HASH,
+    CREATION_CODE as MigrationRegistry_0_1_27_CREATION_CODE,
+    RUNTIME_CODE as MigrationRegistry_0_1_27_RUNTIME_CODE,
+    DEPENDENCIES as MigrationRegistry_0_1_27_DEPENDENCIES
+} from "../generated/0_1_27/MigrationRegistry.sol";
+
+import {
+    DEPLOYED_ADDRESS as MigrationRegistry_0_1_28_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as MigrationRegistry_0_1_28_BYTECODE_HASH,
+    CREATION_CODE as MigrationRegistry_0_1_28_CREATION_CODE,
+    RUNTIME_CODE as MigrationRegistry_0_1_28_RUNTIME_CODE,
+    DEPENDENCIES as MigrationRegistry_0_1_28_DEPENDENCIES
+} from "../generated/0_1_28/MigrationRegistry.sol";
+
+import {
+    DEPLOYED_ADDRESS as MigrationRegistry_0_1_29_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as MigrationRegistry_0_1_29_BYTECODE_HASH,
+    CREATION_CODE as MigrationRegistry_0_1_29_CREATION_CODE,
+    RUNTIME_CODE as MigrationRegistry_0_1_29_RUNTIME_CODE,
+    DEPENDENCIES as MigrationRegistry_0_1_29_DEPENDENCIES
+} from "../generated/0_1_29/MigrationRegistry.sol";
+
 /// @title LibMigrationRegistryReleased
 /// @notice Every frozen release of `MigrationRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -147,7 +171,7 @@ library LibMigrationRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](15);
+        DeploySuite[] memory suites = new DeploySuite[](18);
         suites[0] = DeploySuite({
             suite: "migration-registry@0_1_7",
             creationCode: MigrationRegistry_0_1_7_CREATION_CODE,
@@ -310,6 +334,39 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_26_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_26_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0)
+        });
+        suites[15] = DeploySuite({
+            suite: "migration-registry@0_1_27",
+            creationCode: MigrationRegistry_0_1_27_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_27_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_27_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_27_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_27_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0)
+        });
+        suites[16] = DeploySuite({
+            suite: "migration-registry@0_1_28",
+            creationCode: MigrationRegistry_0_1_28_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_28_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_28_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_28_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_28_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0)
+        });
+        suites[17] = DeploySuite({
+            suite: "migration-registry@0_1_29",
+            creationCode: MigrationRegistry_0_1_29_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_29_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_29_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_29_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_29_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
             networks: new string[](0)
         });

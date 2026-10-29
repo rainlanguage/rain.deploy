@@ -2,16 +2,16 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
+import {IRegistryDelegatesV3} from "../../../src/interface/IRegistryDelegatesV3.sol";
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
-    IMigrationRegistryV4,
+    IMigrationRegistryV5,
     MIGRATION_HEAD_GENESIS,
     Prerequisite
-} from "../../../src/interface/IMigrationRegistryV4.sol";
+} from "../../../src/interface/IMigrationRegistryV5.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
@@ -114,8 +114,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
         deployRegistry();
         vm.warp(landedAt);
         vm.prank(upstream);
-        IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationV4(
+        IMigrationRegistryV5(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationV5(
                 upstream,
                 upstreamNamespace,
                 prerequisite,
@@ -131,17 +131,17 @@ contract LibMigrationRegistryWriteCallTest is Test {
             LibMigrationRegistry.applyMigrationV4Call(sender, namespace, migration, prerequisites, "");
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         // Building writes nothing.
-        assertEq(LibMigrationRegistry.appliedV4(sender, namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV5(sender, namespace, migration), 0);
 
         send(sender, to, data);
 
-        assertEq(LibMigrationRegistry.appliedV4(sender, namespace, migration), landedAt);
-        assertEq(LibMigrationRegistry.headV4(sender, namespace), migration);
-        assertEq(LibMigrationRegistry.appliedOntoV4(sender, namespace, migration), MIGRATION_HEAD_GENESIS);
+        assertEq(LibMigrationRegistry.appliedV5(sender, namespace, migration), landedAt);
+        assertEq(LibMigrationRegistry.headV5(sender, namespace), migration);
+        assertEq(LibMigrationRegistry.appliedOntoV5(sender, namespace, migration), MIGRATION_HEAD_GENESIS);
         assertEq(
-            abi.encode(LibMigrationRegistry.appliedAfterV4(sender, namespace, migration)), abi.encode(prerequisites)
+            abi.encode(LibMigrationRegistry.appliedAfterV5(sender, namespace, migration)), abi.encode(prerequisites)
         );
-        assertEq(LibMigrationRegistry.appliedV4(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV5(address(this), namespace, migration), 0);
     }
 
     /// The history call records the moment it was GIVEN, not the block it
@@ -182,12 +182,12 @@ contract LibMigrationRegistryWriteCallTest is Test {
         send(sender, toA, dataA);
         send(sender, toB, dataB);
 
-        assertEq(LibMigrationRegistry.appliedV4(sender, namespace, migrationA), appliedAt);
-        assertEq(LibMigrationRegistry.appliedV4(sender, namespace, migrationB), appliedAt);
-        assertEq(LibMigrationRegistry.headV4(sender, namespace), migrationB);
-        assertEq(LibMigrationRegistry.appliedOntoV4(sender, namespace, migrationB), migrationA);
-        assertEq(abi.encode(LibMigrationRegistry.appliedAfterV4(sender, namespace, migrationB)), abi.encode(ontoA));
-        assertEq(LibMigrationRegistry.appliedV4(address(this), namespace, migrationA), 0);
+        assertEq(LibMigrationRegistry.appliedV5(sender, namespace, migrationA), appliedAt);
+        assertEq(LibMigrationRegistry.appliedV5(sender, namespace, migrationB), appliedAt);
+        assertEq(LibMigrationRegistry.headV5(sender, namespace), migrationB);
+        assertEq(LibMigrationRegistry.appliedOntoV5(sender, namespace, migrationB), migrationA);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfterV5(sender, namespace, migrationB)), abi.encode(ontoA));
+        assertEq(LibMigrationRegistry.appliedV5(address(this), namespace, migrationA), 0);
     }
 
     /// A call that names the account that BUILT it as the writer, sent by
@@ -214,10 +214,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertFalse(success);
         assertEq(
             returnData,
-            abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, address(this), namespace, sender)
+            abi.encodeWithSelector(IRegistryDelegatesV3.NotApproved.selector, address(this), namespace, sender)
         );
-        assertEq(LibMigrationRegistry.appliedV4(sender, namespace, migration), 0);
-        assertEq(LibMigrationRegistry.appliedV4(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV5(sender, namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV5(address(this), namespace, migration), 0);
     }
 
     /// The hazard the build-time check exists for: a low-level call into an
@@ -228,7 +228,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assumeSender(sender);
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         bytes memory data = abi.encodeCall(
-            IMigrationRegistryV4.applyMigrationV4,
+            IMigrationRegistryV5.applyMigrationV5,
             (sender, namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS), "")
         );
         send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, data);

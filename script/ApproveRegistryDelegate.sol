@@ -13,10 +13,12 @@ import {LibRegistryAuthority} from "../src/lib/LibRegistryAuthority.sol";
 /// @title ApproveRegistryDelegate
 /// @notice Approves `<PREFIX>_ADDRESS` to write under
 /// `LibRegistryAuthority.ROOT_AUTHORITY`
-/// within `<PREFIX>_SCOPE` in a registry, on every network the declaration
-/// supports or on the comma-separated subset `<PREFIX>_NETWORKS` names,
-/// signed on a Trezor by that authority. `<PREFIX>_APPROVED=false` revokes
-/// instead. Each registry's script names its prefix and its registry.
+/// within each of the comma-separated scopes `<PREFIX>_SCOPES` names, and
+/// unscoped when `<PREFIX>_UNSCOPED=true`, in a registry, on every network the
+/// declaration supports or on the comma-separated subset `<PREFIX>_NETWORKS`
+/// names, signed on a Trezor by that authority as one `multicall` per network.
+/// `<PREFIX>_APPROVED=false` revokes instead. Each registry's script names its
+/// prefix and its registry.
 ///
 /// Local only: the signer is a hardware wallet. The README's sections on
 /// managing the registries carry the commands.
@@ -46,6 +48,19 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
         return vm.envOr(envName("NETWORKS"), ",", d.networks);
     }
 
+    /// The scopes to act on: `<PREFIX>_SCOPES` if set, otherwise none.
+    /// @return The scopes as a consumer writes them.
+    function selectedScopes() internal view returns (string[] memory) {
+        return vm.envOr(envName("SCOPES"), ",", new string[](0));
+    }
+
+    /// Whether the unscoped approval is acted on too: `<PREFIX>_UNSCOPED` if
+    /// set, otherwise false.
+    /// @return True to set the unscoped approval as well.
+    function targetUnscoped() internal view returns (bool) {
+        return vm.envOr(envName("UNSCOPED"), false);
+    }
+
     /// The target state: `<PREFIX>_APPROVED` if set, otherwise true.
     /// @return Whether the delegate is to be approved.
     function targetApproved() internal view returns (bool) {
@@ -70,7 +85,8 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             d.networks,
             msg.sender,
             LibRegistryAuthority.ROOT_AUTHORITY,
-            vm.envString(envName("SCOPE")),
+            selectedScopes(),
+            targetUnscoped(),
             vm.envAddress(envName("ADDRESS")),
             targetApproved()
         );
@@ -87,7 +103,8 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             selectedNetworks(d),
             d.networks,
             LibRegistryAuthority.ROOT_AUTHORITY,
-            vm.envString(envName("SCOPE")),
+            selectedScopes(),
+            targetUnscoped(),
             vm.envAddress(envName("ADDRESS")),
             targetApproved()
         );

@@ -147,7 +147,8 @@ library LibRainDeployDeclaration {
             h.writeSuiteSnapshot,
             h.releasedMechanismData,
             h.releasedImport,
-            h.legacyRecordId
+            h.legacyRecordId,
+            h.checkNetworks
         );
     }
 

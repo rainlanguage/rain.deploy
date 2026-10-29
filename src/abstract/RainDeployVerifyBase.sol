@@ -12,11 +12,17 @@ import {
     ZoltuDerivationMismatch
 } from "./RainDeploySuitesBase.sol";
 
+/// Thrown when a suite's mechanism derives no deployed address on any of the suite's `networks`, so there is no
+/// code to take the suite's code hash from.
+/// @param suite The suite derived.
+error NoDerivedDeployment(string suite);
+
 /// What a suite derives, by itself, through its own mechanism.
 struct DerivedDeploy {
     /// The suite the derivation came from.
     string suite;
-    /// The address the suite's mechanism deploys it to on each of its `networks`, in order.
+    /// The address the suite's mechanism deploys it to on each of its `networks`, in order. `address(0)` where a
+    /// per-network mechanism records nothing on that network.
     address[] deployedAddresses;
     /// The code hash the mechanism leaves behind at those addresses.
     bytes32 bytecodeHash;
@@ -36,8 +42,16 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         uint256 snapshotId = vm.snapshotState();
 
         address[] memory deployedAddresses = deployLocally(d, vm, suite);
+        // `address(0)` is a network with nothing recorded, and its code hash is not the suite's.
+        uint256 deployed = 0;
+        while (deployed < deployedAddresses.length && deployedAddresses[deployed] == address(0)) {
+            deployed++;
+        }
+        if (deployed == deployedAddresses.length) {
+            revert NoDerivedDeployment(suite.suite);
+        }
         DerivedDeploy memory derived = DerivedDeploy({
-            suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
+            suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[deployed].codehash
         });
 
         // A failed revert is unrecoverable, not a warning to silence. The etch
