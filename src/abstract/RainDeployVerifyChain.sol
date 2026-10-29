@@ -121,21 +121,36 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 }
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
                 checkOnChain(d, suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
-                (bool declared, uint256 blockNumber) =
-                    describedByMetaEmissionBlock(d, suites[j].suite, networks[i].chainId);
-                LibRainDeployDescribedByMeta.checkEmittedAt(
-                    forkVm,
-                    networks[i].name,
-                    suites[j].suite,
-                    networks[i].chainId,
-                    d.metaBoard,
-                    declared,
-                    blockNumber,
-                    addresses[i][j],
-                    suites[j].describedByMeta
-                );
+                checkDescribedByMetaEmitted(d, forkVm, networks[i], suites[j], addresses[i][j]);
             }
         }
+    }
+
+    /// `LibRainDeployDescribedByMeta.checkEmittedAt` at the block `d` declares for `suite` on `network`.
+    /// @param d The declaration.
+    /// @param forkVm The Vm instance to read logs with.
+    /// @param network The selected fork's network.
+    /// @param suite The suite.
+    /// @param described The suite's address on the network.
+    function checkDescribedByMetaEmitted(
+        DeployDeclaration memory d,
+        Vm forkVm,
+        SupportedNetwork memory network,
+        DeploySuite memory suite,
+        address described
+    ) internal view {
+        (bool declared, uint256 blockNumber) = describedByMetaEmissionBlock(d, suite.suite, network.chainId);
+        LibRainDeployDescribedByMeta.checkEmittedAt(
+            forkVm,
+            network.name,
+            suite.suite,
+            network.chainId,
+            d.metaBoard,
+            declared,
+            blockNumber,
+            described,
+            suite.describedByMeta
+        );
     }
 
     /// @param networks The networks.
