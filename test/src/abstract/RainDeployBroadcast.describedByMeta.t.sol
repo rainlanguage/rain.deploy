@@ -8,6 +8,8 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {DescribedByMetaNotEmittedAt, MetaBoardUndeclared} from "../../../src/lib/LibRainDeployDescribedByMeta.sol";
 import {DescribedByMetaDeploy} from "../../concrete/DescribedByMetaDeploy.sol";
 import {RecordedMetaEmission, RecordingMetaBoard} from "../../concrete/RecordingMetaBoard.sol";
+import {MockCreate2Factory} from "../../concrete/MockCreate2Factory.sol";
+import {MOCK_CREATE2_FACTORY} from "../../lib/LibMockCreate2Mechanism.sol";
 
 contract RainDeployBroadcastDescribedByMetaTest is Test {
     uint256 constant ARBITRUM_CHAIN_ID = 42161;
@@ -100,6 +102,21 @@ contract RainDeployBroadcastDescribedByMetaTest is Test {
             assertEq(emissions[i].subject, bytes32(uint256(uint160(deployed[i]))));
             assertEq(emissions[i].meta, META);
         }
+    }
+
+    function testEachNetworkEmitsAboutItsOwnDeployment() external {
+        vm.etch(MOCK_CREATE2_FACTORY, type(MockCreate2Factory).runtimeCode);
+        vm.makePersistent(MOCK_CREATE2_FACTORY);
+        address[] memory deployed = broadcast(
+            sDeploy.perNetworkDescribedSuite("described-per-network@0_0_1", META), sDeploy.arbitrumAndPolygon()
+        );
+        assertNotEq(deployed[0], deployed[1]);
+        RecordedMetaEmission[] memory emissions = sMetaBoard.emissions();
+        assertEq(emissions.length, 2);
+        assertEq(emissions[0].chainId, ARBITRUM_CHAIN_ID);
+        assertEq(emissions[0].subject, bytes32(uint256(uint160(deployed[0]))));
+        assertEq(emissions[1].chainId, POLYGON_CHAIN_ID);
+        assertEq(emissions[1].subject, bytes32(uint256(uint160(deployed[1]))));
     }
 
     function testASuiteWithoutAMetaEmitsNothing() external {

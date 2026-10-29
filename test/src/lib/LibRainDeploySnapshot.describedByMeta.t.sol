@@ -245,6 +245,12 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
         );
     }
 
+    function testARecordEndingOnItsMetaDeclarationRecordsIt() external {
+        checkRecorded(
+            "declared-last", string.concat(addressLine(), "bytes constant DESCRIBED_BY_META = hex\"ff\";"), true
+        );
+    }
+
     function testARecordNotDeclaringTheMetaRecordsNone() external {
         checkRecorded("undeclared", addressLine(), false);
         checkRecorded("commented", string.concat(addressLine(), "/*\n", metaLine("ff"), "*/\n"), false);
