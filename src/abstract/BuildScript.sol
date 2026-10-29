@@ -444,8 +444,9 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         uint256 count = 0;
         for (uint256 i = 0; i < generated.length; i++) {
             if (bytes(generated[i].constantPrefix).length > 0) {
-                written[count++] =
-                    LibRainDeploySnapshot.pathForLib(dir, LibRainDeploySnapshot.aliasLibraryName(generated[i].contractName));
+                written[count++] = LibRainDeploySnapshot.pathForLib(
+                    dir, LibRainDeploySnapshot.aliasLibraryName(generated[i].contractName)
+                );
             }
         }
         string[] memory paths = new string[](count);

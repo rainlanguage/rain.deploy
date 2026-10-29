@@ -35,9 +35,7 @@ contract TwoMechanismBuildScriptHarness is TwoMechanismDeploySuites, ExternalDep
             candidate: declaredCandidate(d, create2Candidate().suite)
         });
         generated[1] = GeneratedContract({
-            contractName: "MockDeployableV2",
-            constantPrefix: "",
-            candidate: declaredCandidate(d, saltCandidate().suite)
+            contractName: "MockDeployableV2", constantPrefix: "", candidate: declaredCandidate(d, saltCandidate().suite)
         });
         return generated;
     }

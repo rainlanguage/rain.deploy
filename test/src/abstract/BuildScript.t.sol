@@ -116,7 +116,8 @@ contract BuildScriptTest is Test {
         assertEq(paths[0], harness.rollingPath());
         assertEq(paths[0], "test/generated-buildscript-run-declared/candidate/MockDeployableV2.sol");
         assertEq(
-            paths[1], "fixture-lib/buildscript-harness/generated-buildscript-run-declared/LibMockDeployableV2Released.sol"
+            paths[1],
+            "fixture-lib/buildscript-harness/generated-buildscript-run-declared/LibMockDeployableV2Released.sol"
         );
         assertEq(paths[2], "fixture-lib/buildscript-harness/generated-buildscript-run-declared/LibReleasedSuites.sol");
         assertEq(paths[3], "foundry.toml");
