@@ -413,11 +413,11 @@ library LibMockCreate2Mechanism {
         return LibMockMechanismProbe.legacyRecordId(MOCK_CREATE2_MECHANISM_ID, path);
     }
 
-    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory)
+    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory networks)
         internal
-        pure
+        view
         returns (uint256[] memory)
     {
-        return new uint256[](0);
+        return LibMockMechanismProbe.checkNetworks(MOCK_CREATE2_MECHANISM_ID, LibRainDeploy.networkChainIds(networks));
     }
 }

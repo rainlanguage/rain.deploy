@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -261,28 +261,125 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), suites);
     }
 
-    /// With no suites and every mechanism's config empty, no network is forked and no `checkNetwork` runs.
-    function testNoSuitesAndEmptyConfigsForksNothing() external {
+    function chainIdList(uint256 a, uint256 b) internal pure returns (uint256[] memory) {
+        uint256[] memory chainIds = new uint256[](2);
+        chainIds[0] = a;
+        chainIds[1] = b;
+        return chainIds;
+    }
+
+    function checkNetworksAnyCall(bytes32 mechanismId) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(IMockMechanismProbe.checkNetworks.selector, mechanismId);
+    }
+
+    function returnNetworks(bytes memory checkNetworksCall, uint256[] memory chainIds) internal {
+        vm.mockCall(MOCK_MECHANISM_PROBE, checkNetworksCall, abi.encode(chainIds));
+    }
+
+    function createForkCall(string memory network) internal pure returns (bytes memory) {
+        return abi.encodeCall(LocalForkVm.createFork, (network));
+    }
+
+    /// @return Each `createFork` call to the fork Vm among `accesses`, in the order made.
+    function createForkCalls(Vm.AccountAccess[] memory accesses) internal view returns (bytes[] memory) {
+        bytes[] memory calls = new bytes[](accesses.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < accesses.length; i++) {
+            bytes memory data = accesses[i].data;
+            if (
+                accesses[i].account == address(sForkVm) && accesses[i].kind == VmSafe.AccountAccessKind.Call
+                    && data.length >= 4 && bytes4(data) == LocalForkVm.createFork.selector
+            ) {
+                calls[count++] = data;
+            }
+        }
+        bytes[] memory made = new bytes[](count);
+        for (uint256 i = 0; i < count; i++) {
+            made[i] = calls[i];
+        }
+        return made;
+    }
+
+    /// The suite is live everywhere it is required, so the only refusal there is to make is `checkNetworks`'.
+    function testACheckNetworksRefusalStopsTheGroupBeforeAnyFork() external {
+        etchLive(42161);
+        etchLive(137);
+        vm.mockCallRevert(MOCK_MECHANISM_PROBE, checkNetworksAnyCall(MOCK_SALT_MECHANISM_ID), abi.encode("refused"));
+        vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
+        vm.expectCall(MOCK_MECHANISM_PROBE, abi.encodeWithSelector(IMockMechanismProbe.addRecordedNetworks.selector), 0);
+        vm.expectRevert(abi.encode("refused"));
+        this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON, mockRelease());
+    }
+
+    /// Each mechanism is answered only for the exact networks checked; the returns overlap, out of `networks` order.
+    function testNoSuitesForksOnlyTheReturnedNetworksInNetworksOrder() external {
+        string[] memory names = new string[](4);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.POLYGON;
+        names[2] = LibRainDeploy.ETHEREUM;
+        names[3] = LibRainDeploy.BASE;
+        uint256[] memory checked = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(names));
+        uint256[] memory onlyBase = new uint256[](1);
+        onlyBase[0] = 8453;
+        returnNetworks(
+            abi.encodeCall(IMockMechanismProbe.checkNetworks, (MOCK_CREATE2_MECHANISM_ID, checked)), onlyBase
+        );
+        returnNetworks(
+            abi.encodeCall(IMockMechanismProbe.checkNetworks, (MOCK_SALT_MECHANISM_ID, checked)),
+            chainIdList(8453, 42161)
+        );
+        expectCheckNetwork(LibRainDeploy.ARBITRUM_ONE, 42161, 1);
+        expectCheckNetwork(LibRainDeploy.POLYGON, 137, 0);
+        expectCheckNetwork(LibRainDeploy.ETHEREUM, 1, 0);
+        expectCheckNetwork(LibRainDeploy.BASE, 8453, 1);
+
+        vm.startStateDiffRecording();
+        this.externalCheckAllOn(names, new DeploySuite[](0));
+        bytes[] memory forked = createForkCalls(vm.stopAndReturnStateDiff());
+
+        bytes[] memory expected = new bytes[](2);
+        expected[0] = createForkCall(LibRainDeploy.ARBITRUM_ONE);
+        expected[1] = createForkCall(LibRainDeploy.BASE);
+        assertEq(forked, expected);
+    }
+
+    /// A mechanism's config alone forks nothing.
+    function testNoSuitesForksNothingWhenNoMechanismReturnsANetwork() external {
+        this.setMockConfig(hex"01");
         vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
         vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.selectFork.selector), 0);
         vm.expectCall(MOCK_MECHANISM_PROBE, abi.encodeWithSelector(IMockMechanismProbe.checkNetwork.selector), 0);
         this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0));
     }
 
-    /// With no suites but a mechanism with non-empty config, each checked network is forked and `checkNetwork` runs
-    /// on it.
-    function testNoSuitesAndAConfiguredMechanismForksAndChecksEachNetwork() external {
-        this.setMockConfig(hex"01");
-        vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.ARBITRUM_ONE)), 1);
-        vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.POLYGON)), 1);
-        expectCheckNetwork(LibRainDeploy.ARBITRUM_ONE, 42161, 1);
-        expectCheckNetwork(LibRainDeploy.POLYGON, 137, 1);
-        this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0));
+    /// The suite is required on Arbitrum only and a mechanism returns only Polygon, yet every network is forked.
+    function testWithSuitesForksEveryNetworkInNetworksOrder() external {
+        etchLive(42161);
+        uint256[] memory onlyPolygon = new uint256[](1);
+        onlyPolygon[0] = 137;
+        returnNetworks(checkNetworksAnyCall(MOCK_SALT_MECHANISM_ID), onlyPolygon);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = arbitrumOnlySuite();
+        string[] memory names = new string[](3);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.POLYGON;
+        names[2] = LibRainDeploy.ETHEREUM;
+
+        vm.startStateDiffRecording();
+        this.externalCheckAllOn(names, suites);
+        bytes[] memory forked = createForkCalls(vm.stopAndReturnStateDiff());
+
+        bytes[] memory expected = new bytes[](3);
+        expected[0] = createForkCall(LibRainDeploy.ARBITRUM_ONE);
+        expected[1] = createForkCall(LibRainDeploy.POLYGON);
+        expected[2] = createForkCall(LibRainDeploy.ETHEREUM);
+        assertEq(forked, expected);
     }
 
     /// A hook reads its mechanism's config through the declaration the caller passes it.
     function testCheckNetworkReadsItsConfigThroughTheDeclaration() external {
         this.setMockConfig(hex"c0ffee");
+        returnNetworks(checkNetworksAnyCall(MOCK_SALT_MECHANISM_ID), chainIdList(42161, 137));
         vm.expectCall(
             MOCK_MECHANISM_PROBE,
             abi.encodeCall(IMockMechanismProbe.declaredConfig, (MOCK_SALT_MECHANISM_ID, hex"c0ffee")),

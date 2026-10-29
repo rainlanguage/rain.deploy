@@ -201,11 +201,11 @@ library LibMockSaltMechanism {
         return LibMockMechanismProbe.legacyRecordId(MOCK_SALT_MECHANISM_ID, path);
     }
 
-    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory)
+    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory networks)
         internal
-        pure
+        view
         returns (uint256[] memory)
     {
-        return new uint256[](0);
+        return LibMockMechanismProbe.checkNetworks(MOCK_SALT_MECHANISM_ID, LibRainDeploy.networkChainIds(networks));
     }
 }
