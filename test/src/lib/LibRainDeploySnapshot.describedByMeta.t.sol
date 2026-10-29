@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {
     NEWLINE_DUE_TO_MAX_LENGTH,
     RAIN_COPYRIGHT_TEXT,
@@ -52,8 +53,24 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
         return vm.replace(vm.toString(data), "0x", "");
     }
 
+    /// `createDir` without `recursive` refuses an existing directory, so each parallel fuzz worker claims its own.
+    function claimRoot(string memory name) internal returns (string memory) {
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(ROOT, true);
+        for (uint256 i = 0;; i++) {
+            string memory root = string.concat(ROOT, "/", name, "-", vm.toString(i));
+            (bool created,) = address(vm).call(abi.encodeCall(VmSafe.createDir, (root, false)));
+            if (created) {
+                return root;
+            }
+        }
+    }
+
     function writeSuite(string memory name, bytes memory meta) internal returns (string memory, string memory) {
-        string memory root = string.concat(ROOT, "/", name);
+        return writeSuiteAt(string.concat(ROOT, "/", name), meta);
+    }
+
+    function writeSuiteAt(string memory root, bytes memory meta) internal returns (string memory, string memory) {
         string memory path = LibRainDeployZoltuMechanism.writeSuiteSnapshot(
             zoltuDeclaration(),
             vm,
@@ -145,7 +162,7 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
 
     function testAWrittenMetaIsRecordedAndAliased(bytes memory meta) external {
         vm.assume(meta.length != 0);
-        (string memory root, string memory path) = writeSuite("round-trip", meta);
+        (string memory root, string memory path) = writeSuiteAt(claimRoot("round-trip"), meta);
         bool recorded = this.externalRecordedDescribedByMeta(path);
         string memory imported = this.externalReleasedImport(path);
         string memory entry = this.externalReleasedSuiteEntry(path);
