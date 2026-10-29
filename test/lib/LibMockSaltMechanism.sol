@@ -9,7 +9,7 @@ import {
     DeploySuite,
     SnapshotFile
 } from "../../src/abstract/RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibMockCreate2Mechanism, MOCK_CREATE2_FACTORY} from "./LibMockCreate2Mechanism.sol";
@@ -45,7 +45,8 @@ library LibMockSaltMechanism {
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
             releasedImport: releasedImport,
-            legacyRecordId: legacyRecordId
+            legacyRecordId: legacyRecordId,
+            checkNetworks: checkNetworks
         });
     }
 
@@ -198,5 +199,13 @@ library LibMockSaltMechanism {
 
     function legacyRecordId(DeployDeclaration memory, Vm, string memory path) internal view returns (bytes32) {
         return LibMockMechanismProbe.legacyRecordId(MOCK_SALT_MECHANISM_ID, path);
+    }
+
+    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory)
+        internal
+        pure
+        returns (uint256[] memory)
+    {
+        return new uint256[](0);
     }
 }

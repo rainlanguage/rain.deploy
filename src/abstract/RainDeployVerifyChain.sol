@@ -47,16 +47,14 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         SupportedNetwork[] memory networks,
         DeploySuite[] memory suites
     ) internal {
+        uint256[][] memory needed = new uint256[][](d.mechanisms.length);
+        for (uint256 k = 0; k < d.mechanisms.length; k++) {
+            needed[k] = d.mechanisms[k].checkNetworks(d, networks);
+        }
         // Nothing to check is not a reason to touch every RPC endpoint.
         if (suites.length == 0) {
-            bool configured = false;
-            for (uint256 k = 0; k < d.mechanisms.length; k++) {
-                if (d.mechanisms[k].config.length > 0) {
-                    configured = true;
-                    break;
-                }
-            }
-            if (!configured) {
+            networks = networksNeeded(networks, needed);
+            if (networks.length == 0) {
                 return;
             }
         }
@@ -118,6 +116,37 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 checkOnChain(d, suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
             }
         }
+    }
+
+    /// @param networks The networks.
+    /// @param needed The chain ids each mechanism's `checkNetworks` returned.
+    /// @return The networks whose chain id is in some `needed`, in `networks` order.
+    function networksNeeded(SupportedNetwork[] memory networks, uint256[][] memory needed)
+        internal
+        pure
+        returns (SupportedNetwork[] memory)
+    {
+        bool[] memory keep = new bool[](networks.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < networks.length; i++) {
+            for (uint256 k = 0; k < needed.length && !keep[i]; k++) {
+                for (uint256 m = 0; m < needed[k].length; m++) {
+                    if (needed[k][m] == networks[i].chainId) {
+                        keep[i] = true;
+                        count++;
+                        break;
+                    }
+                }
+            }
+        }
+        SupportedNetwork[] memory kept = new SupportedNetwork[](count);
+        uint256 n = 0;
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (keep[i]) {
+                kept[n++] = networks[i];
+            }
+        }
+        return kept;
     }
 
     /// The selected fork MUST hold `suite` at `deployedAddress` with its derived code and its declared dependencies.
