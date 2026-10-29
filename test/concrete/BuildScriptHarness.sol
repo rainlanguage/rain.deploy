@@ -14,6 +14,7 @@ import {
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
+import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
 /// @dev The contract the harness's one candidate snapshots.
@@ -257,7 +258,7 @@ contract BuildScriptHarness is BuildScript {
                 recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
                 sExtraRecord,
-                type(MockDeployableV2).creationCode,
+                type(MockDeployable).creationCode,
                 new DeployDependency[](0)
             );
         }
