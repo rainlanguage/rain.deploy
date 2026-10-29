@@ -149,7 +149,8 @@ contract RainDeployVerifySnapshotBaseDescribedByMetaTest is ExampleDeploySuites,
 
     function testANetworkDeployingNothingLocallyIsNotCheckedAndTheNextIs(bytes memory meta) external {
         vm.assume(meta.length != 0);
-        bytes memory creationCode = abi.encodePacked(type(MockDescribedByMeta).creationCode, abi.encode(keccak256(meta)));
+        bytes memory creationCode =
+            abi.encodePacked(type(MockDescribedByMeta).creationCode, abi.encode(keccak256(meta)));
         MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
         recorded[0] = describedNetwork(creationCode, 137);
         vm.expectCall(recorded[0].deployedAddress, abi.encodeCall(IDescribedByMetaV1.describedByMetaV1, ()), 1);
@@ -159,7 +160,8 @@ contract RainDeployVerifySnapshotBaseDescribedByMetaTest is ExampleDeploySuites,
     function testALaterLocalDeploymentAnsweringAnotherHashIsAMismatch(bytes memory meta, bytes32 answer) external {
         vm.assume(meta.length != 0);
         vm.assume(answer != keccak256(meta));
-        bytes memory creationCode = abi.encodePacked(type(MockDescribedByMeta).creationCode, abi.encode(keccak256(meta)));
+        bytes memory creationCode =
+            abi.encodePacked(type(MockDescribedByMeta).creationCode, abi.encode(keccak256(meta)));
         MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](2);
         recorded[0] = describedNetwork(creationCode, 42161);
         recorded[1] = describedNetwork(creationCode, 137);
