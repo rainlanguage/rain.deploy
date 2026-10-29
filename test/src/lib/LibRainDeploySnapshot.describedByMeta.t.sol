@@ -57,9 +57,10 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
     function claimRoot(string memory name) internal returns (string memory) {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(ROOT, true);
+        bool recursive = false;
         for (uint256 i = 0; i < 256; i++) {
             string memory root = string.concat(ROOT, "/", name, "-", vm.toString(i));
-            (bool created,) = address(vm).call(abi.encodeCall(VmSafe.createDir, (root, false)));
+            (bool created,) = address(vm).call(abi.encodeCall(VmSafe.createDir, (root, recursive)));
             if (created) {
                 return root;
             }

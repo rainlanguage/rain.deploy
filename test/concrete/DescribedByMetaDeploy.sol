@@ -19,6 +19,7 @@ contract DescribedByMetaDeploy is ExternalDeployBroadcast {
     address internal sMetaBoard;
     DescribedByMetaEmission[] internal sEmissions;
 
+    //forge-lint: disable-next-line(missing-zero-check)
     function setMetaBoard(address metaBoard) external {
         sMetaBoard = metaBoard;
     }
