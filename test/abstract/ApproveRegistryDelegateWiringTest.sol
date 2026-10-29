@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IRegistryDelegatesV2} from "../../src/interface/IRegistryDelegatesV2.sol";
+import {IRegistryDelegatesV3} from "../../src/interface/IRegistryDelegatesV3.sol";
 import {LibRegistryDelegatesApprove} from "../../src/lib/LibRegistryDelegatesApprove.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -58,24 +58,31 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         address delegate = address(0x5AFE);
         string memory name = string.concat("rain.deploy.approve-test.", vm.toString(vm.randomUint()));
         bytes32 hashed = keccak256(bytes(name));
-        IRegistryDelegatesV2 registry = IRegistryDelegatesV2(registryAddress);
+        IRegistryDelegatesV3 registry = IRegistryDelegatesV3(registryAddress);
 
-        vm.setEnv(e("SCOPE"), name);
+        vm.setEnv(e("SCOPES"), name);
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
 
         vm.setEnv(e("ADDRESS"), "not-an-address");
         assertEnvAddressRefused(script, e("ADDRESS"));
         vm.setEnv(e("ADDRESS"), vm.toString(address(0)));
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.ZeroDelegate.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV3.ZeroDelegate.selector));
         script.runAsItself();
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
 
-        vm.setEnv(e("SCOPE"), "Not.Canonical");
+        vm.setEnv(e("SCOPES"), "Not.Canonical");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.runAsItself();
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.verify();
-        vm.setEnv(e("SCOPE"), name);
+        // The list is split on commas: a second name is read, so a repeat of
+        // the first is refused.
+        vm.setEnv(e("SCOPES"), string.concat(name, ",", name));
+        vm.expectRevert(abi.encodeWithSelector(LibRegistryDelegatesApprove.DuplicateScope.selector, name));
+        script.runAsItself();
+        vm.expectRevert(abi.encodeWithSelector(LibRegistryDelegatesApprove.DuplicateScope.selector, name));
+        script.verify();
+        vm.setEnv(e("SCOPES"), name);
 
         // The signer is the script's `msg.sender`: this test contract is not
         // the authority.
@@ -105,7 +112,7 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             assertEq(forkIds[i], LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
         }
-        assertTrue(registry.approvedV4(authority, hashed, delegate));
+        assertTrue(registry.approvedV5(authority, hashed, delegate));
         script.verify();
 
         // A run already in the target state sends nothing.
@@ -135,13 +142,45 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
         assertEq(forkIds[0], LibRainDeploy.declaredNetworkConfigs(supported)[0].chainId);
-        assertFalse(registry.approvedV4(authority, hashed, delegate));
+        assertFalse(registry.approvedV5(authority, hashed, delegate));
         script.verify();
 
         // `true` approves again.
         vm.setEnv(e("APPROVED"), "true");
         script.runAsItself();
-        assertTrue(registry.approvedV4(authority, hashed, delegate));
+        assertTrue(registry.approvedV5(authority, hashed, delegate));
+        script.verify();
+
+        // Two names: the second is approved too, and `verify()` reads both.
+        string memory second = string.concat(name, ".second");
+        bytes32 secondHashed = keccak256(bytes(second));
+        vm.setEnv(e("SCOPES"), string.concat(name, ",", second));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector,
+                network,
+                authority,
+                secondHashed,
+                delegate,
+                true
+            )
+        );
+        script.verify();
+        script.runAsItself();
+        assertTrue(registry.approvedV5(authority, hashed, delegate));
+        assertTrue(registry.approvedV5(authority, secondHashed, delegate));
+        script.verify();
+
+        // `UNSCOPED=true` sets the unscoped approval too, and `verify()` reads it.
+        vm.setEnv(e("UNSCOPED"), "true");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRegistryDelegatesApprove.UnexpectedUnscopedApproval.selector, network, authority, delegate, true
+            )
+        );
+        script.verify();
+        script.runAsItself();
+        assertTrue(registry.approvedUnscopedV5(authority, delegate));
         script.verify();
     }
 

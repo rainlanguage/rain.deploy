@@ -55,6 +55,30 @@ import {
     DEPENDENCIES as ConfigRegistry_0_1_26_DEPENDENCIES
 } from "../generated/0_1_26/ConfigRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as ConfigRegistry_0_1_27_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as ConfigRegistry_0_1_27_BYTECODE_HASH,
+    CREATION_CODE as ConfigRegistry_0_1_27_CREATION_CODE,
+    RUNTIME_CODE as ConfigRegistry_0_1_27_RUNTIME_CODE,
+    DEPENDENCIES as ConfigRegistry_0_1_27_DEPENDENCIES
+} from "../generated/0_1_27/ConfigRegistry.sol";
+
+import {
+    DEPLOYED_ADDRESS as ConfigRegistry_0_1_28_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as ConfigRegistry_0_1_28_BYTECODE_HASH,
+    CREATION_CODE as ConfigRegistry_0_1_28_CREATION_CODE,
+    RUNTIME_CODE as ConfigRegistry_0_1_28_RUNTIME_CODE,
+    DEPENDENCIES as ConfigRegistry_0_1_28_DEPENDENCIES
+} from "../generated/0_1_28/ConfigRegistry.sol";
+
+import {
+    DEPLOYED_ADDRESS as ConfigRegistry_0_1_29_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as ConfigRegistry_0_1_29_BYTECODE_HASH,
+    CREATION_CODE as ConfigRegistry_0_1_29_CREATION_CODE,
+    RUNTIME_CODE as ConfigRegistry_0_1_29_RUNTIME_CODE,
+    DEPENDENCIES as ConfigRegistry_0_1_29_DEPENDENCIES
+} from "../generated/0_1_29/ConfigRegistry.sol";
+
 /// @title LibConfigRegistryReleased
 /// @notice Every frozen release of `ConfigRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -75,7 +99,7 @@ library LibConfigRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](6);
+        DeploySuite[] memory suites = new DeploySuite[](9);
         suites[0] = DeploySuite({
             suite: "config-registry@0_1_19",
             creationCode: ConfigRegistry_0_1_19_CREATION_CODE,
@@ -147,6 +171,39 @@ library LibConfigRegistryReleased {
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
             networks: new string[](0),
             describedByMeta: ""
+        });
+        suites[6] = DeploySuite({
+            suite: "config-registry@0_1_27",
+            creationCode: ConfigRegistry_0_1_27_CREATION_CODE,
+            storedDeployedAddress: ConfigRegistry_0_1_27_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ConfigRegistry_0_1_27_BYTECODE_HASH,
+            storedRuntimeCode: ConfigRegistry_0_1_27_RUNTIME_CODE,
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
+            dependencies: abi.decode(ConfigRegistry_0_1_27_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0)
+        });
+        suites[7] = DeploySuite({
+            suite: "config-registry@0_1_28",
+            creationCode: ConfigRegistry_0_1_28_CREATION_CODE,
+            storedDeployedAddress: ConfigRegistry_0_1_28_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ConfigRegistry_0_1_28_BYTECODE_HASH,
+            storedRuntimeCode: ConfigRegistry_0_1_28_RUNTIME_CODE,
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
+            dependencies: abi.decode(ConfigRegistry_0_1_28_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0)
+        });
+        suites[8] = DeploySuite({
+            suite: "config-registry@0_1_29",
+            creationCode: ConfigRegistry_0_1_29_CREATION_CODE,
+            storedDeployedAddress: ConfigRegistry_0_1_29_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ConfigRegistry_0_1_29_BYTECODE_HASH,
+            storedRuntimeCode: ConfigRegistry_0_1_29_RUNTIME_CODE,
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
+            dependencies: abi.decode(ConfigRegistry_0_1_29_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0)
         });
         return suites;
     }

@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
-import {IConfigRegistryV4} from "../interface/IConfigRegistryV4.sol";
+import {IConfigRegistryV5} from "../interface/IConfigRegistryV5.sol";
 import {LibConfigRegistry} from "./LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
@@ -244,8 +244,8 @@ library LibConfigRegistryRegister {
     {
         if (
             sender != authority
-                && !IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                    .approvedV4(authority, name, sender)
+                && !IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+                    .approvedV5(authority, name, sender)
         ) {
             revert SenderNotApproved(network.name, sender, authority, name);
         }
@@ -274,14 +274,14 @@ library LibConfigRegistryRegister {
     /// @return The moment it was bound, or zero.
     /// @return The hash of the type it was bound as, or zero.
     function currentBinding(address authority, bytes32 name) internal view returns (bytes memory, uint256, bytes32) {
-        try IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV4(authority, name) returns (
+        try IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV5(authority, name) returns (
             bytes memory value, uint256 registeredAt, bytes32 valueTypeHash
         ) {
             return (value, registeredAt, valueTypeHash);
         } catch (bytes memory reason) {
             if (
                 keccak256(reason)
-                    == keccak256(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, authority, name))
+                    == keccak256(abi.encodeWithSelector(IConfigRegistryV5.NameNotRegistered.selector, authority, name))
             ) {
                 return ("", 0, bytes32(0));
             }
@@ -296,14 +296,14 @@ library LibConfigRegistryRegister {
     /// @param authority The authority to bind under.
     /// @param name The hashed name.
     /// @param binding The binding; its `name` is not read.
-    /// @return The `registerV4` calldata.
+    /// @return The `registerV5` calldata.
     function registerCalldata(address authority, bytes32 name, ConfigBinding memory binding)
         internal
         pure
         returns (bytes memory)
     {
         return abi.encodeCall(
-            IConfigRegistryV4.registerV4, (authority, name, binding.valueType, binding.value, binding.meta)
+            IConfigRegistryV5.registerV5, (authority, name, binding.valueType, binding.value, binding.meta)
         );
     }
 
@@ -433,8 +433,8 @@ library LibConfigRegistryRegister {
         bool binds = !isBound(bound, boundTypeHash, binding);
         if (binds) {
             vm.startBroadcast(sender);
-            IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                .registerV4(authority, name, binding.valueType, binding.value, binding.meta);
+            IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+                .registerV5(authority, name, binding.valueType, binding.value, binding.meta);
             vm.stopBroadcast();
         }
         return (binds, record);
@@ -462,13 +462,13 @@ library LibConfigRegistryRegister {
     ) internal pure returns (bytes32, SupportedNetwork[] memory, string memory) {
         bytes32 hashed = nameHash(binding.name);
         if (binding.value.length == 0) {
-            revert IConfigRegistryV4.EmptyValue(hashed);
+            revert IConfigRegistryV5.EmptyValue(hashed);
         }
         if (binding.value.length % 32 != 0) {
             revert NonCanonicalValue(binding.value);
         }
         if (bytes(binding.valueType).length == 0) {
-            revert IConfigRegistryV4.EmptyValueType(hashed);
+            revert IConfigRegistryV5.EmptyValueType(hashed);
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         return (hashed, networks, describeInputs(vm, binding, sender, authority));

@@ -12,7 +12,7 @@ import {
     UnexpectedMechanismData,
     ZoltuDerivationMismatch
 } from "../abstract/RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "./LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "./LibRainDeploySnapshot.sol";
 
@@ -48,7 +48,8 @@ library LibRainDeployZoltuMechanism {
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
             releasedImport: releasedImport,
-            legacyRecordId: legacyRecordId
+            legacyRecordId: legacyRecordId,
+            checkNetworks: checkNetworks
         });
     }
 
@@ -223,5 +224,13 @@ library LibRainDeployZoltuMechanism {
     /// @return 0: a Zoltu record never declares `MECHANISM_DATA`, so no untagged legacy record is Zoltu's.
     function legacyRecordId(DeployDeclaration memory, Vm, string memory) internal pure returns (bytes32) {
         return 0;
+    }
+
+    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory)
+        internal
+        pure
+        returns (uint256[] memory)
+    {
+        return new uint256[](0);
     }
 }

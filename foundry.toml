@@ -11,7 +11,7 @@ name = "rain-deploy"
 # that tag moves it, in lockstep with the record the cut writes. A version
 # published before this lifecycle has no such record, so src/generated/ holds no
 # directory for it.
-version = "0.1.26"
+version = "0.1.29"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
@@ -32,6 +32,9 @@ optimizer = true
 # below; change all three.
 optimizer_runs = 100000
 evm_version = "cancun"
+# The build script and its regenerate-libs test run past the default
+# 1,073,741,824 gas: every frozen release is regenerated in one run.
+gas_limit = 4000000000
 cbor_metadata = false
 bytecode_hash = "none"
 
