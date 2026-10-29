@@ -123,8 +123,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
             for (uint256 i = 0; i < networks.length; i++) {
                 vm.selectFork(forkIds[i]);
-                (bool declared, uint256 blockNumber) =
-                    describedByMetaEmissionBlock(d, frozen.suite, configs[i].chainId);
+                (bool declared, uint256 blockNumber) = describedByMetaEmissionBlock(d, frozen.suite, configs[i].chainId);
                 LibRainDeployDescribedByMeta.emitUnlessDeclared(
                     vm,
                     frozen.suite,
