@@ -41,7 +41,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s refusals before any network
     /// is forked on each network it is required on, and `checkOnChain`'s on each selected fork it is required on.
     /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before forking, and on each network it is
-    /// required on `checkEmittedAt`'s refusals at its declared emission block.
+    /// required on `checkEmittedAt`'s refusals at its declared emission block and `checkDescribes`'s at its address.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -126,7 +126,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-    /// `LibRainDeployDescribedByMeta.checkEmittedAt` at the block `d` declares for `suite` on `network`.
+    /// `LibRainDeployDescribedByMeta.checkEmittedAt` at the block `d` declares for `suite` on `network`, then
+    /// `LibRainDeployDescribedByMeta.checkDescribes` on `described` on the selected fork.
     /// @param d The declaration.
     /// @param forkVm The Vm instance to read logs with.
     /// @param network The selected fork's network.
@@ -151,6 +152,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             described,
             suite.describedByMeta
         );
+        LibRainDeployDescribedByMeta.checkDescribes(suite.suite, described, suite.describedByMeta);
     }
 
     /// @param networks The networks.
