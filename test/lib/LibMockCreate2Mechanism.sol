@@ -69,7 +69,8 @@ library LibMockCreate2Mechanism {
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
             releasedImport: releasedImport,
-            legacyRecordId: legacyRecordId
+            legacyRecordId: legacyRecordId,
+            checkNetworks: checkNetworks
         });
     }
 
@@ -410,5 +411,13 @@ library LibMockCreate2Mechanism {
 
     function legacyRecordId(DeployDeclaration memory, Vm, string memory path) internal view returns (bytes32) {
         return LibMockMechanismProbe.legacyRecordId(MOCK_CREATE2_MECHANISM_ID, path);
+    }
+
+    function checkNetworks(DeployDeclaration memory, SupportedNetwork[] memory networks)
+        internal
+        view
+        returns (uint256[] memory)
+    {
+        return LibMockMechanismProbe.checkNetworks(MOCK_CREATE2_MECHANISM_ID, LibRainDeploy.networkChainIds(networks));
     }
 }

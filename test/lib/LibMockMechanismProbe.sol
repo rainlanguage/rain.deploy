@@ -26,6 +26,8 @@ interface IMockMechanismProbe {
         view;
 
     function legacyRecordId(bytes32 mechanismId, string memory path) external view returns (bytes32);
+
+    function checkNetworks(bytes32 mechanismId, uint256[] memory chainIds) external view returns (uint256[] memory);
 }
 
 /// @title LibMockMechanismProbe
@@ -61,6 +63,12 @@ library LibMockMechanismProbe {
     function legacyRecordId(bytes32 mechanismId, string memory path) internal view returns (bytes32) {
         bytes memory returned = probe(abi.encodeCall(IMockMechanismProbe.legacyRecordId, (mechanismId, path)));
         return returned.length == 0 ? bytes32(0) : abi.decode(returned, (bytes32));
+    }
+
+    /// @return The probe's answer, no chain ids until a test sets some with `vm.mockCall`.
+    function checkNetworks(bytes32 mechanismId, uint256[] memory chainIds) internal view returns (uint256[] memory) {
+        bytes memory returned = probe(abi.encodeCall(IMockMechanismProbe.checkNetworks, (mechanismId, chainIds)));
+        return returned.length == 0 ? new uint256[](0) : abi.decode(returned, (uint256[]));
     }
 
     function probe(bytes memory data) private view returns (bytes memory) {
