@@ -62,6 +62,7 @@ contract RegistryDelegatesUnscopedTest is Test {
     /// An unscoped delegate binds any name under its authority, and nothing
     /// under another authority.
     function testConfigDelegateWritesEveryName(bytes32 first, bytes32 second) external {
+        vm.assume(first != second);
         ConfigRegistry registry = new ConfigRegistry();
         vm.prank(ACCOUNT);
         registry.approveUnscopedV5(DELEGATE);
