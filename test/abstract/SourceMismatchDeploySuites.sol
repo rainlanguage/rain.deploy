@@ -58,7 +58,8 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });
@@ -73,7 +74,8 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

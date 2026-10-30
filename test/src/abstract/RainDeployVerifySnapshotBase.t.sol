@@ -247,7 +247,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 
@@ -261,7 +262,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 
@@ -654,7 +656,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 

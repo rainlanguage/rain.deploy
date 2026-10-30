@@ -157,6 +157,7 @@ contract Build is BuildScript, RegistryDeploySuites {
     function retiredTemplate(RetiredContract memory retired) internal pure returns (DeploySuite memory) {
         return DeploySuite({
             networks: new string[](0),
+            describedByMeta: "",
             suite: retired.suite,
             creationCode: "",
             storedDeployedAddress: address(0),

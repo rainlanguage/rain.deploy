@@ -86,10 +86,26 @@ error FrozenSnapshotAmbiguous(string path);
 /// @param path The record file declaring `MECHANISM_DATA` more than once.
 error FrozenSnapshotMechanismDataAmbiguous(string path);
 
+/// Thrown when a file in the frozen record declares `DESCRIBED_BY_META` more than once.
+/// @param path The record file declaring `DESCRIBED_BY_META` more than once.
+error FrozenSnapshotDescribedByMetaAmbiguous(string path);
+
 /// Thrown when a file in the frozen record declares its deployed addresses per network, as
 /// `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
 /// @param path The record file.
 error FrozenSnapshotMechanismDataMissing(string path);
+
+/// What a released-suites lib needs from one frozen record, read once per lib write.
+/// @param mechanismId Its `recordedMechanismId`.
+/// @param mechanismData Whether it declares `MECHANISM_DATA`.
+/// @param perNetwork Whether it declares its addresses per network.
+/// @param describedByMeta Whether it declares `DESCRIBED_BY_META`.
+struct RecordFacts {
+    bytes32 mechanismId;
+    bool mechanismData;
+    bool perNetwork;
+    bool describedByMeta;
+}
 
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
@@ -733,6 +749,23 @@ library LibRainDeploySnapshot {
         );
     }
 
+    /// The `DESCRIBED_BY_META` constant a record declares, or nothing for an empty meta.
+    /// @param vm The Vm instance for string operations.
+    /// @param describedByMeta The described-by meta.
+    /// @return The constant, as Solidity source.
+    function describedByMetaConstant(Vm vm, bytes memory describedByMeta) internal pure returns (string memory) {
+        if (describedByMeta.length == 0) {
+            return "";
+        }
+        return LibCodeGen.bytesConstantString(
+            vm,
+            "/// @dev The described-by meta this release emits on the metaboard: what the\n"
+            "/// deployment's `describedByMetaV1()` hashes to.",
+            DESCRIBED_BY_META_NAME,
+            describedByMeta
+        );
+    }
+
     /// Generate one snapshot for one contract.
     ///
     /// The output root is the one `freeze` is handed, and it is required for
@@ -795,8 +828,38 @@ library LibRainDeploySnapshot {
         bytes memory creationCode,
         DeployDependency[] memory dependencies
     ) internal returns (string memory) {
+        return writeSnapshot(
+            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, creationCode, dependencies, ""
+        );
+    }
+
+    /// `writeSnapshot` that also declares `DESCRIBED_BY_META`, when `describedByMeta` is non-empty.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param creationCode That contract's creation code.
+    /// @param dependencies Each address that must already have code on a network before this contract can be
+    /// broadcast there, with that code.
+    /// @param describedByMeta The described-by meta, declared only when non-empty.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        bytes memory creationCode,
+        DeployDependency[] memory dependencies,
+        bytes memory describedByMeta
+    ) internal returns (string memory) {
         address deployed = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
-        string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
+        string memory constants = string.concat(
+            snapshotConstants(vm, deployed, creationCode, dependencies), describedByMetaConstant(vm, describedByMeta)
+        );
 
         // The directory is created by the writer, from the same root and tag
         // this path is derived from, so there is no `createDir` here to
@@ -1275,6 +1338,12 @@ library LibRainDeploySnapshot {
 
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
+    /// The name of the described-by meta constant. A line holding it anywhere but at the start of the writer's
+    /// declaration is not the writer's.
+    string constant DESCRIBED_BY_META_NAME = "DESCRIBED_BY_META";
+
+    string constant DESCRIBED_BY_META_DECLARATION = "bytes constant DESCRIBED_BY_META =";
+
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
     /// for.
     /// @param vm The Vm instance for string operations.
@@ -1568,6 +1637,35 @@ library LibRainDeploySnapshot {
         return (mechanismData != 0, chainIds.length != 0);
     }
 
+    /// Whether a frozen record declares `DESCRIBED_BY_META`. A record cut before a suite could carry a described-by
+    /// meta declares none, as does one cut from a suite that describes nothing.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return True if the record declares it.
+    function recordedDescribedByMeta(Vm vm, string memory path) internal view returns (bool) {
+        return recordedDescribedByMeta(vm, path, recordLines(vm, path, vm.readFile(path)));
+    }
+
+    /// `recordedDescribedByMeta` over a record's already-read `recordLines`.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file the lines were read from.
+    /// @param lines Its `recordLines`.
+    /// @return True if the record declares it.
+    function recordedDescribedByMeta(Vm vm, string memory path, string[] memory lines) internal pure returns (bool) {
+        uint256 declarations = 0;
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (vm.indexOf(lines[i], DESCRIBED_BY_META_DECLARATION) == 0) {
+                declarations++;
+            } else if (vm.contains(lines[i], DESCRIBED_BY_META_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
+            }
+        }
+        if (declarations > 1) {
+            revert FrozenSnapshotDescribedByMetaAmbiguous(path);
+        }
+        return declarations == 1;
+    }
+
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return Whether it declares `MECHANISM_DATA`, with `recordedMechanismShape`'s refusals.
@@ -1604,6 +1702,23 @@ library LibRainDeploySnapshot {
         returns (bytes32)
     {
         (bool mechanismData,) = recordedMechanismShape(vm, path, lines);
+        return recordedMechanismId(d, vm, path, lines, mechanismData);
+    }
+
+    /// `recordedMechanismId` over a record's already-read `recordLines` and `recordedMechanismShape`.
+    /// @param d The declaration whose mechanisms identify the record.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file the lines were read from.
+    /// @param lines Its `recordLines`.
+    /// @param mechanismData Whether it declares `MECHANISM_DATA`, as `recordedMechanismShape` reads it.
+    /// @return The id.
+    function recordedMechanismId(
+        DeployDeclaration memory d,
+        Vm vm,
+        string memory path,
+        string[] memory lines,
+        bool mechanismData
+    ) internal view returns (bytes32) {
         if (!mechanismData) {
             return ZOLTU_MECHANISM_ID;
         }
@@ -1661,14 +1776,14 @@ library LibRainDeploySnapshot {
     }
 
     /// The aliased import one record file contributes.
-    /// @param vm The Vm instance for file and string operations.
+    /// @param vm The Vm instance for string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @param facts `recordedFacts` of `path`.
     /// @return The import statement, and the blank line after it.
-    function releasedImport(Vm vm, string memory path) internal view returns (string memory) {
+    function releasedImport(Vm vm, string memory path, RecordFacts memory facts) internal pure returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
-        (bool mechanismData, bool perNetwork) = recordedMechanismShape(vm, path);
         return string.concat(
-            perNetwork
+            facts.perNetwork
                 ? string("import {\n    ")
                 : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
             "BYTECODE_HASH as ",
@@ -1680,7 +1795,10 @@ library LibRainDeploySnapshot {
             "_RUNTIME_CODE,\n    DEPENDENCIES as ",
             prefix,
             "_DEPENDENCIES",
-            !mechanismData ? string("") : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
+            !facts.mechanismData ? string("") : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
+            facts.describedByMeta
+                ? string.concat(",\n    DESCRIBED_BY_META as ", prefix, "_DESCRIBED_BY_META")
+                : string(""),
             "\n} from \"../generated/",
             tagForRecordPath(vm, path),
             "/",
@@ -1704,66 +1822,88 @@ library LibRainDeploySnapshot {
         string memory suitesImportPath,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedImportBlock(vm, paths, recordedMechanismIds(d, vm, paths), suitesImportPath, d);
+        return releasedImportBlock(vm, paths, recordedFacts(d, vm, paths), suitesImportPath, d);
     }
 
-    /// Each record file's `recordedMechanismId`.
+    /// A record file's `RecordFacts`, from one read of it.
+    /// @param d The declaration whose mechanisms identify the record.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The facts.
+    function recordedFacts(DeployDeclaration memory d, Vm vm, string memory path)
+        internal
+        view
+        returns (RecordFacts memory)
+    {
+        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        (bool mechanismData, bool perNetwork) = recordedMechanismShape(vm, path, lines);
+        return RecordFacts({
+            mechanismId: recordedMechanismId(d, vm, path, lines, mechanismData),
+            mechanismData: mechanismData,
+            perNetwork: perNetwork,
+            describedByMeta: recordedDescribedByMeta(vm, path, lines)
+        });
+    }
+
+    /// Each record file's `recordedFacts`.
     /// @param d The declaration whose mechanisms identify the records.
     /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files.
-    /// @return The ids, index-aligned with `paths`.
-    function recordedMechanismIds(DeployDeclaration memory d, Vm vm, string[] memory paths)
+    /// @return The facts, index-aligned with `paths`.
+    function recordedFacts(DeployDeclaration memory d, Vm vm, string[] memory paths)
         internal
         view
-        returns (bytes32[] memory)
+        returns (RecordFacts[] memory)
     {
-        bytes32[] memory ids = new bytes32[](paths.length);
+        RecordFacts[] memory facts = new RecordFacts[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
-            ids[i] = recordedMechanismId(d, vm, paths[i]);
+            facts[i] = recordedFacts(d, vm, paths[i]);
         }
-        return ids;
+        return facts;
     }
 
-    /// `releasedImportBlock` over the records' already-read `recordedMechanismIds`.
-    /// @param vm The Vm instance for file and string operations.
+    /// `releasedImportBlock` over the records' already-read `recordedFacts`.
+    /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
-    /// @param ids `recordedMechanismIds` of `paths`.
+    /// @param facts `recordedFacts` of `paths`.
     /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @param d The declaration whose mechanism for each record gives the import.
     /// @return The import block.
     function releasedImportBlock(
         Vm vm,
         string[] memory paths,
-        bytes32[] memory ids,
+        RecordFacts[] memory facts,
         string memory suitesImportPath,
         DeployDeclaration memory d
-    ) internal view returns (string memory) {
+    ) internal pure returns (string memory) {
         string memory imports = string.concat(
             "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n"
         );
-        imports =
-            string.concat(imports, distinctConcat(mechanismImports(paths, ids, importRoot(suitesImportPath), d)), "\n");
+        imports = string.concat(
+            imports, distinctConcat(mechanismImports(paths, facts, importRoot(suitesImportPath), d)), "\n"
+        );
         for (uint256 i = 0; i < paths.length; i++) {
-            imports = string.concat(imports, releasedImport(vm, paths[i]));
+            imports = string.concat(imports, releasedImport(vm, paths[i], facts[i]));
         }
         return imports;
     }
 
     /// The import each record's mechanism in `d` gives its `releasedMechanismData`.
     /// @param paths The record's files.
-    /// @param ids `recordedMechanismIds` of `paths`.
+    /// @param facts `recordedFacts` of `paths`.
     /// @param root `importRoot` of the emitted lib's `suitesImportPath`.
     /// @param d The declaration whose mechanism for each record gives the import.
     /// @return The imports, index-aligned with `paths`.
     function mechanismImports(
         string[] memory paths,
-        bytes32[] memory ids,
+        RecordFacts[] memory facts,
         string memory root,
         DeployDeclaration memory d
     ) internal pure returns (string[] memory) {
         string[] memory imports = new string[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
-            imports[i] = LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root);
+            imports[i] =
+                LibRainDeployDeclaration.mechanismById(d, facts[i].mechanismId, paths[i]).releasedImport(d, root);
         }
         return imports;
     }
@@ -1832,14 +1972,14 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedSuiteEntry(vm, i, path, recordedMechanismId(d, vm, path), template, d);
+        return releasedSuiteEntry(vm, i, path, recordedFacts(d, vm, path), template, d);
     }
 
-    /// `releasedSuiteEntry` for a record whose `recordedMechanismId` is already read.
+    /// `releasedSuiteEntry` for a record whose `recordedFacts` are already read.
     /// @param vm The Vm instance for file and string operations.
     /// @param i The entry's index.
     /// @param path The record file the entry aliases.
-    /// @param id `recordedMechanismId` of `path`.
+    /// @param facts `recordedFacts` of `path`.
     /// @param template The candidate declaration the key and the artifact path come from.
     /// @param d The declaration whose mechanism for the record gives the entry its `mechanismData`.
     /// @return The entry.
@@ -1847,18 +1987,15 @@ library LibRainDeploySnapshot {
         Vm vm,
         uint256 i,
         string memory path,
-        bytes32 id,
+        RecordFacts memory facts,
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
-        string memory storedDeployedAddress;
-        string memory mechanismData =
-            LibRainDeployDeclaration.mechanismById(d, id, path).releasedMechanismData(d, vm, path, prefix);
-        {
-            (, bool perNetwork) = recordedMechanismShape(vm, path);
-            storedDeployedAddress = perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
-        }
+        string memory mechanismData = LibRainDeployDeclaration.mechanismById(d, facts.mechanismId, path)
+            .releasedMechanismData(d, vm, path, prefix);
+        string memory storedDeployedAddress =
+            facts.perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
         string memory head = string.concat(
             "        suites[",
             vm.toString(i),
@@ -1883,7 +2020,9 @@ library LibRainDeploySnapshot {
             prefix,
             "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: ",
             mechanismData,
-            ",\n            networks: new string[](0)\n        });\n"
+            ",\n            networks: new string[](0),\n            describedByMeta: ",
+            facts.describedByMeta ? string.concat(prefix, "_DESCRIBED_BY_META") : string("\"\""),
+            "\n        });\n"
         );
     }
 
@@ -1903,17 +2042,15 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedLibraryBlock(
-            vm, libraryName, contractName, paths, recordedMechanismIds(d, vm, paths), template, d
-        );
+        return releasedLibraryBlock(vm, libraryName, contractName, paths, recordedFacts(d, vm, paths), template, d);
     }
 
-    /// `releasedLibraryBlock` over the records' already-read `recordedMechanismIds`.
+    /// `releasedLibraryBlock` over the records' already-read `recordedFacts`.
     /// @param vm The Vm instance for file and string operations.
     /// @param libraryName The generated library's name.
     /// @param contractName The contract the released record describes.
     /// @param paths The record's files, in the order they are emitted.
-    /// @param ids `recordedMechanismIds` of `paths`.
+    /// @param facts `recordedFacts` of `paths`.
     /// @param template The candidate declaration the metadata comes from.
     /// @param d The declaration whose mechanism for each record gives its entry `mechanismData`.
     /// @return The library block.
@@ -1922,13 +2059,13 @@ library LibRainDeploySnapshot {
         string memory libraryName,
         string memory contractName,
         string[] memory paths,
-        bytes32[] memory ids,
+        RecordFacts[] memory facts,
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
-            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], ids[i], template, d));
+            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], facts[i], template, d));
         }
 
         return string.concat(
@@ -1960,7 +2097,7 @@ library LibRainDeploySnapshot {
     }
 
     /// The body of a generated released-suites lib: its import block then its library block, over one
-    /// `recordedMechanismIds` read of `paths`.
+    /// `recordedFacts` read of `paths`.
     /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files, in the order they are emitted.
     /// @param libraryName The generated library's name.
@@ -1978,10 +2115,10 @@ library LibRainDeploySnapshot {
         DeployDeclaration memory d,
         string memory suitesImportPath
     ) internal view returns (string memory) {
-        bytes32[] memory ids = recordedMechanismIds(d, vm, paths);
+        RecordFacts[] memory facts = recordedFacts(d, vm, paths);
         return string.concat(
-            releasedImportBlock(vm, paths, ids, suitesImportPath, d),
-            releasedLibraryBlock(vm, libraryName, contractName, paths, ids, template, d)
+            releasedImportBlock(vm, paths, facts, suitesImportPath, d),
+            releasedLibraryBlock(vm, libraryName, contractName, paths, facts, template, d)
         );
     }
 

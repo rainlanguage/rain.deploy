@@ -78,7 +78,8 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
                     networks: new MockNetworkDeploy[](0),
                     root: sMockRecordRoot
                 })
-            )
+            ),
+            describedByMeta: ""
         });
     }
 

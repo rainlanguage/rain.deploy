@@ -29,7 +29,8 @@ contract LibRainDeployDeclarationTest is Test {
             artifactPath: "",
             dependencies: new DeployDependency[](0),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: networks
+            networks: networks,
+            describedByMeta: ""
         });
     }
 

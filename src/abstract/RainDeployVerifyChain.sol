@@ -7,6 +7,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeployDeclaration, DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// Thrown when `requiresSuiteOn` requires a suite on none of the networks
 /// checked, which would pass the suite having checked it nowhere.
@@ -39,6 +40,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds (`addCandidateNetworks`);
     /// the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s refusals before any network
     /// is forked on each network it is required on, and `checkOnChain`'s on each selected fork it is required on.
+    /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before forking, and on each network it is
+    /// required on `checkEmittedAt`'s refusals at its declared emission block and `checkDescribes`'s at its address.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -89,6 +92,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             if (!requiredSomewhere) {
                 revert SuiteRequiredNowhere(suites[j].suite);
             }
+            checkedMetaBoard(d, suites[j]);
         }
 
         address[][] memory addresses = new address[][](networks.length);
@@ -117,8 +121,38 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 }
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
                 checkOnChain(d, suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
+                checkDescribedByMetaEmitted(d, forkVm, networks[i], suites[j], addresses[i][j]);
             }
         }
+    }
+
+    /// `LibRainDeployDescribedByMeta.checkEmittedAt` at the block `d` declares for `suite` on `network`, then
+    /// `LibRainDeployDescribedByMeta.checkDescribes` on `described` on the selected fork.
+    /// @param d The declaration.
+    /// @param forkVm The Vm instance to read logs with.
+    /// @param network The selected fork's network.
+    /// @param suite The suite.
+    /// @param described The suite's address on the network.
+    function checkDescribedByMetaEmitted(
+        DeployDeclaration memory d,
+        Vm forkVm,
+        SupportedNetwork memory network,
+        DeploySuite memory suite,
+        address described
+    ) internal view {
+        (bool declared, uint256 blockNumber) = describedByMetaEmissionBlock(d, suite.suite, network.chainId);
+        LibRainDeployDescribedByMeta.checkEmittedAt(
+            forkVm,
+            network.name,
+            suite.suite,
+            network.chainId,
+            d.metaBoard,
+            declared,
+            blockNumber,
+            described,
+            suite.describedByMeta
+        );
+        LibRainDeployDescribedByMeta.checkDescribes(suite.suite, described, suite.describedByMeta);
     }
 
     /// @param networks The networks.
