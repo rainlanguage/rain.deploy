@@ -12,6 +12,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
+import {MetaBoardUndeclared} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -228,6 +229,9 @@ struct DeploySuite {
     /// The networks, as `[rpc_endpoints]` aliases, the suite has an address on and the chain group requires it live
     /// on. A suite required on none of the networks checked is refused with `SuiteRequiredNowhere`.
     string[] networks;
+    /// The Rain meta the deployment's `describedByMetaV1()` hashes to, emitted on the declaration's `metaBoard`,
+    /// frozen with each release. Empty for a suite that describes nothing.
+    bytes describedByMeta;
 }
 
 /// Where a suite's snapshot is written and the header it carries. Read-only input to `writeSuiteSnapshot`.
@@ -263,6 +267,19 @@ struct DeployDeclaration {
     ExternalDeployment[] externalDeployments;
     /// The creation code of the contract an anchored candidate's key names, from its type.
     function(string memory) internal view returns (bytes memory) sourceCreationCode;
+    /// The metaboard every suite's `describedByMeta` is emitted on and checked against, on every network. Zero
+    /// unless declared; a declaration with a suite carrying a described-by meta MUST name one.
+    address metaBoard;
+    /// The block each suite's `describedByMeta` was emitted on `metaBoard` in, per chain. Empty unless declared; the
+    /// broadcast emits where none is declared and the chain group refuses a suite carrying a meta with none.
+    DescribedByMetaEmission[] describedByMetaEmissions;
+}
+
+/// The block a suite's described-by meta was emitted in on a chain.
+struct DescribedByMetaEmission {
+    string suite;
+    uint256 chainId;
+    uint256 blockNumber;
 }
 
 /// A deterministic deployment outside the repo that a suite may reach.
@@ -386,6 +403,41 @@ abstract contract RainDeploySuitesBase {
         view
     {
         LibRainDeployDeclaration.addCandidateNetworks(d, suite, chainIds);
+    }
+
+    /// Refuses `MetaBoardUndeclared` when `suite` carries a described-by meta and `d.metaBoard` is zero.
+    /// @param d The declaration.
+    /// @param suite The suite.
+    /// @return The metaboard.
+    function checkedMetaBoard(DeployDeclaration memory d, DeploySuite memory suite) internal pure returns (address) {
+        if (suite.describedByMeta.length != 0 && d.metaBoard == address(0)) {
+            revert MetaBoardUndeclared(suite.suite);
+        }
+        return d.metaBoard;
+    }
+
+    /// The block `d` declares `suite`'s described-by meta was emitted in on `chainId`.
+    /// @param d The declaration.
+    /// @param suite The suite.
+    /// @param chainId The chain.
+    /// @return Whether `d` declares one.
+    /// @return The block, zero when none is declared.
+    function describedByMetaEmissionBlock(DeployDeclaration memory d, string memory suite, uint256 chainId)
+        internal
+        pure
+        returns (bool, uint256)
+    {
+        bytes32 suiteHash = keccak256(bytes(suite));
+        uint256 length = d.describedByMetaEmissions.length;
+        uint256 i = 0;
+        for (; i < length; i++) {
+            DescribedByMetaEmission memory emission = d.describedByMetaEmissions[i];
+            if (emission.chainId == chainId && keccak256(bytes(emission.suite)) == suiteHash) {
+                break;
+            }
+        }
+        bool found = i < length;
+        return (found, found ? d.describedByMetaEmissions[i].blockNumber : 0);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data

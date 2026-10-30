@@ -55,7 +55,8 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 
@@ -73,7 +74,8 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             storedRuntimeCode: type(MockReachingDeployable).runtimeCode,
             artifactPath: "test/concrete/MockReachingDeployable.sol:MockReachingDeployable",
             dependencies: deps,
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 

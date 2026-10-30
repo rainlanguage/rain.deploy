@@ -1401,7 +1401,8 @@ contract LibRainDeploySnapshotTest is Test {
             storedRuntimeCode: "",
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 
@@ -1483,7 +1484,7 @@ contract LibRainDeploySnapshotTest is Test {
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
             "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),\n",
-            "            networks: new string[](0)\n        });\n"
+            "            networks: new string[](0),\n            describedByMeta: \"\"\n        });\n"
         );
     }
 
@@ -3713,7 +3714,8 @@ contract LibRainDeploySnapshotTest is Test {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: hex"00"
+            mechanismData: hex"00",
+            describedByMeta: ""
         });
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
         this.externalZoltuWriteSuiteSnapshot(

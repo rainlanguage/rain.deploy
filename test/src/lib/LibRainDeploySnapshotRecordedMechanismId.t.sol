@@ -109,9 +109,16 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
             artifactPath: "",
             dependencies: new DeployDependency[](0),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         return LibRainDeploySnapshot.releasedSuiteEntry(vm, 0, path, template, declaration());
+    }
+
+    function externalReleasedImportBlock(string memory path) external view returns (string memory) {
+        string[] memory paths = new string[](1);
+        paths[0] = path;
+        return LibRainDeploySnapshot.releasedImportBlock(vm, paths, declaration());
     }
 
     function checkId(string memory name, string memory record, bytes32 expected) internal {
@@ -294,9 +301,33 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
             "            storedBytecodeHash: Record_0_1_0_BYTECODE_HASH,\n"
             "            storedRuntimeCode: Record_0_1_0_RUNTIME_CODE,\n" "            artifactPath: \"\",\n"
             "            dependencies: abi.decode(Record_0_1_0_DEPENDENCIES, (DeployDependency[])),\n"
-            "            mechanismData: Record_0_1_0_MECHANISM_DATA,\n" "            networks: new string[](0)\n"
-            "        });\n"
+            "            mechanismData: Record_0_1_0_MECHANISM_DATA,\n" "            networks: new string[](0),\n"
+            "            describedByMeta: \"\"\n" "        });\n"
         );
+    }
+
+    function testAPerNetworkRecordIsReleasedWithoutAnEveryNetworkAddress() external {
+        (string memory dir, string memory path) = writeRecord(
+            "released-per-network",
+            string.concat(
+                perNetworkLine(137), mechanismDataLine(hexDigits(MOCK_CREATE2_MECHANISM_ID)), perNetworkLine(42161)
+            )
+        );
+        string memory entry = this.externalReleasedSuiteEntry(path);
+        string memory imports = this.externalReleasedImportBlock(path);
+        removeRecord(dir);
+        assertEq(
+            entry,
+            "        suites[0] = DeploySuite({\n" "            suite: \"Record@0_1_0\",\n"
+            "            creationCode: Record_0_1_0_CREATION_CODE,\n" "            storedDeployedAddress: address(0),\n"
+            "            storedBytecodeHash: Record_0_1_0_BYTECODE_HASH,\n"
+            "            storedRuntimeCode: Record_0_1_0_RUNTIME_CODE,\n" "            artifactPath: \"\",\n"
+            "            dependencies: abi.decode(Record_0_1_0_DEPENDENCIES, (DeployDependency[])),\n"
+            "            mechanismData: Record_0_1_0_MECHANISM_DATA,\n" "            networks: new string[](0),\n"
+            "            describedByMeta: \"\"\n" "        });\n"
+        );
+        assertTrue(vm.contains(imports, "import {\n    BYTECODE_HASH as Record_0_1_0_BYTECODE_HASH,\n"));
+        assertFalse(vm.contains(imports, "DEPLOYED_ADDRESS"));
     }
 
     function testTheReleasedEntryOfAnUnclaimedRecordIsUnclaimed() external {

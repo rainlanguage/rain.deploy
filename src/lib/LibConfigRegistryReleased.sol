@@ -109,7 +109,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_19_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[1] = DeploySuite({
             suite: "config-registry@0_1_20",
@@ -120,7 +121,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_20_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[2] = DeploySuite({
             suite: "config-registry@0_1_21",
@@ -131,7 +133,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_21_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[3] = DeploySuite({
             suite: "config-registry@0_1_22",
@@ -142,7 +145,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_22_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[4] = DeploySuite({
             suite: "config-registry@0_1_25",
@@ -153,7 +157,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_25_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[5] = DeploySuite({
             suite: "config-registry@0_1_26",
@@ -164,7 +169,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_26_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[6] = DeploySuite({
             suite: "config-registry@0_1_27",
@@ -175,7 +181,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_27_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[7] = DeploySuite({
             suite: "config-registry@0_1_28",
@@ -186,7 +193,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_28_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[8] = DeploySuite({
             suite: "config-registry@0_1_29",
@@ -197,7 +205,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_29_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         return suites;
     }

@@ -190,6 +190,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
         return DeployCandidate({
             snapshot: DeploySuite({
                 networks: new string[](0),
+                describedByMeta: "",
                 suite: "config-registry",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
                 storedDeployedAddress: LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -220,6 +221,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
         return DeployCandidate({
             snapshot: DeploySuite({
                 networks: new string[](0),
+                describedByMeta: "",
                 suite: "migration-registry",
                 creationCode: MIGRATION_REGISTRY_CREATION_CODE_CANDIDATE,
                 storedDeployedAddress: LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,

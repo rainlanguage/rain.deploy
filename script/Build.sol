@@ -51,6 +51,7 @@ contract Build is BuildScript, RegistryDeploySuites {
             contractName: "AddressRegistry",
             template: DeploySuite({
                 networks: new string[](0),
+                describedByMeta: "",
                 suite: ADDRESS_REGISTRY_SUITE,
                 creationCode: "",
                 storedDeployedAddress: address(0),

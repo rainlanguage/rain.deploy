@@ -71,7 +71,8 @@ contract MissingDependencyDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: dependencies,
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

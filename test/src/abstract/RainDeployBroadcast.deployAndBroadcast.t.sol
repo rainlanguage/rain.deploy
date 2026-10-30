@@ -30,7 +30,8 @@ contract RainDeployBroadcastDeployAndBroadcastTest is Test {
             storedRuntimeCode: "",
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 

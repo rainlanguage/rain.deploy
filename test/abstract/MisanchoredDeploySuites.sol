@@ -26,7 +26,8 @@ abstract contract MisanchoredDeploySuites is RainDeploySuitesBase {
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });
