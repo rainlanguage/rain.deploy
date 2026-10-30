@@ -77,6 +77,7 @@ contract BuildScriptHarness is BuildScript {
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 networks: new string[](0),
+                describedByMeta: "",
                 suite: BUILD_SCRIPT_HARNESS_SUITE,
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),

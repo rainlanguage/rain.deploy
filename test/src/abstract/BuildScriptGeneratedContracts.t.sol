@@ -36,6 +36,7 @@ contract BuildScriptGeneratedContractsTest is Test {
     function suite(string memory key, string memory artifactPath) internal pure returns (DeploySuite memory) {
         return DeploySuite({
             networks: LibRainDeploy.supportedNetworks(),
+            describedByMeta: "",
             suite: key,
             creationCode: "",
             storedDeployedAddress: address(0),
