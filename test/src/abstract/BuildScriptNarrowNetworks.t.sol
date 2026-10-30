@@ -26,9 +26,6 @@ import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 /// `ExampleDeployNarrowNetworks` gives: it is neither the first nor the last
 /// entry the catalogue lists.
 contract BuildScriptNarrowNetworksTest is Test {
-    /// The contract the fixture snapshots describe.
-    string constant FIXTURE_CONTRACT = "Fixture";
-
     /// Where the narrowed-declaration fixture is built.
     string constant NARROW_FIXTURE_ROOT = "test/generated-buildscript-narrow";
 
@@ -56,7 +53,14 @@ contract BuildScriptNarrowNetworksTest is Test {
             //forge-lint: disable-next-line(unsafe-cheatcode)
             vm.removeDir(root, true);
         }
-        BuildScriptHarness harness = new BuildScriptHarness(root, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(root);
+        string memory libDir = harness.externalLibDir();
+        if (vm.exists(libDir)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(libDir, true);
+        }
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
         harness.declareNetworks(networks);
         harness.seedConfig();
         return harness;
@@ -84,6 +88,8 @@ contract BuildScriptNarrowNetworksTest is Test {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(NARROW_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
 
         assertFalse(
             vm.contains(stagedConfig, LibRainDeploy.ARBITRUM_ONE),
@@ -128,5 +134,7 @@ contract BuildScriptNarrowNetworksTest is Test {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(UNCATALOGUED_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
     }
 }

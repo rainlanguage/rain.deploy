@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {BuildScript, GeneratedContract} from "../../src/abstract/BuildScript.sol";
 import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
@@ -22,11 +22,23 @@ contract TwoMechanismBuildScriptHarness is TwoMechanismDeploySuites, ExternalDep
         return d;
     }
 
-    function snapshotContractNames() internal pure override returns (string[] memory) {
-        return new string[](0);
+    function generatedContracts(DeployDeclaration memory d)
+        internal
+        pure
+        override
+        returns (GeneratedContract[] memory)
+    {
+        GeneratedContract[] memory generated = new GeneratedContract[](2);
+        generated[0] = GeneratedContract({
+            contractName: "MockDeployable",
+            constantPrefix: "",
+            candidate: declaredCandidate(d, create2Candidate().suite)
+        });
+        generated[1] = GeneratedContract({
+            contractName: "MockDeployableV2", constantPrefix: "", candidate: declaredCandidate(d, saltCandidate().suite)
+        });
+        return generated;
     }
 
     function regenerateSnapshots() internal override {}
-
-    function regenerateLibs(DeployDeclaration memory) internal override {}
 }
