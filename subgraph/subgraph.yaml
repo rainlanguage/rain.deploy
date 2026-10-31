@@ -1,17 +1,12 @@
-      abis:
-        - name: ST0xOrchestratorBeaconSetDeployer
-          file: ./abis/ST0xOrchestratorBeaconSetDeployer.json
-      eventHandlers:
-        - event: Deployment(indexed address,indexed address,address)
-          handler: handleOrchestratorDeployment
-      file: ./src/orchestratordeployer.ts
+specVersion: 0.0.4
+schema:
+  file: ./schema.graphql
+dataSources:
   - kind: ethereum/contract
     name: ConfigRegistry
-    network: robinhood
+    network: template
     source:
       abi: ConfigRegistry
-      address: "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8"
-      startBlock: 95041555
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -35,11 +30,9 @@
       file: ./src/configregistry.ts
   - kind: ethereum/contract
     name: MigrationRegistry
-    network: robinhood
+    network: template
     source:
       abi: MigrationRegistry
-      address: "0x5A48e719785E11c4643EA4056D0861A6a69e91a0"
-      startBlock: 95041555
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -63,11 +56,9 @@
       file: ./src/migrationregistry.ts
   - kind: ethereum/contract
     name: ConfigRegistryV5
-    network: robinhood
+    network: template
     source:
       abi: ConfigRegistryV5
-      address: "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9"
-      startBlock: 100259389
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -101,11 +92,9 @@
       file: ./src/configregistry.ts
   - kind: ethereum/contract
     name: MigrationRegistryV5
-    network: robinhood
+    network: template
     source:
       abi: MigrationRegistryV5
-      address: "0xd708186f68D527B64c001398550627508205EE31"
-      startBlock: 100268990
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
