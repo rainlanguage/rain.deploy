@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+
 import { afterEach, assert, clearStore, describe, test } from "matchstick-as";
 import { Address, Bytes } from "@graphprotocol/graph-ts";
 import { MigrationRecord, RegistryMeta } from "../generated/schema";

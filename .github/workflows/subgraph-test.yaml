@@ -33,6 +33,6 @@ jobs:
       - name: Install soldeer dependencies
         run: nix develop github:rainlanguage/rainix#sol-shell -c forge soldeer install
       - name: Generate subgraph types
-        run: nix develop -c bash -c 'forge build && cd subgraph && npm ci && graph codegen'
+        run: nix develop -c forge build && nix develop github:rainlanguage/rainix/9f0a4c37c587872b40cd0b9c77c23818b2a6b5b2#subgraph-shell -c bash -c 'cd subgraph && npm ci && graph codegen'
       - name: Matchstick tests
-        run: nix develop -c subgraph-test
+        run: nix develop github:rainlanguage/rainix/9f0a4c37c587872b40cd0b9c77c23818b2a6b5b2#subgraph-shell -c subgraph-test
