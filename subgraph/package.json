@@ -1,6 +1,6 @@
 {
-  "name": "st0x-rbac-subgraph",
-  "description": "Subgraph setup",
+  "name": "rain-deploy-registry-subgraph",
+  "description": "rain.deploy registry subgraph",
   "version": "1.0.0",
   "license": "LicenseRef-DCL-1.0",
   "author": "Rain Open Source Software Ltd",
@@ -8,8 +8,8 @@
     "test": "graph test -d"
   },
   "dependencies": {
-    "@graphprotocol/graph-cli": "^0.63.0",
-    "@graphprotocol/graph-ts": "=0.32.0",
+    "@graphprotocol/graph-cli": "0.69.2",
+    "@graphprotocol/graph-ts": "0.35.1",
     "matchstick-as": "^0.6.0",
     "source-map-support": "^0.5.21"
   }
