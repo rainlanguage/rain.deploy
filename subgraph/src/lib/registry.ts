@@ -35,12 +35,6 @@ export function registryDelegateId(
   return registry.concat(account).concat(scope).concat(delegate);
 }
 
-/**
- * Record one `IRegistryDelegatesV1` `Approved` (`approved` true) or `Revoked`
- * (false). Both registries emit either log whatever the prior state, so the log
- * sets `approved` rather than toggling it. A replay of a log already recorded
- * returns before touching the approval, so an older log cannot roll it back.
- */
 export function recordDelegateChange(
   kind: string,
   event: ethereum.Event,
@@ -93,12 +87,6 @@ export function registryUnscopedDelegateId(
   return registry.concat(account).concat(delegate);
 }
 
-/**
- * Record one `IRegistryDelegatesV3` `ApprovedUnscoped` (`approved` true) or
- * `RevokedUnscoped` (false). Either log is emitted whatever the prior state, so
- * the log sets `approved`, and a replay returns before touching it, as
- * `recordDelegateChange` does for the scoped logs.
- */
 export function recordUnscopedDelegateChange(
   kind: string,
   event: ethereum.Event,
@@ -155,11 +143,6 @@ function metaSubjectId(registry: Bytes, subject: Bytes): Bytes {
   return registry.concat(subject);
 }
 
-/**
- * Point a V5 config registry's subject at the binding and the `Register` that
- * most recently wrote it. The registry emits a write's `MetaV1_2` after its
- * `Register` in the same call, so the subject always resolves by then.
- */
 export function recordMetaSubjectBinding(
   registry: Bytes,
   subject: Bytes,
@@ -187,12 +170,6 @@ export function recordMetaSubjectRecord(
   entity.save();
 }
 
-/**
- * Record one `MetaV1_2` log from a V5 registry, linked to whatever its subject
- * names. A config subject is shared by every bind of the name, so the meta
- * links to the binding's latest `Register` only when that `Register` is in the
- * same transaction: a name is bound at most once per block.
- */
 export function recordRegistryMeta(
   kind: string,
   event: ethereum.Event,

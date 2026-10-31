@@ -1,309 +1,152 @@
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-# The rain.deploy registry index.
-#
-# One subgraph is deployed per network (see `networks.json`), so every entity
-# here is implicitly scoped to a single chain and nothing carries a chain id.
-
-"What kind of contract a `Contract` row describes."
 enum ContractKind {
-  "The chain's V5 `ConfigRegistry`."
   CONFIG_REGISTRY_V5
-  "The chain's V5 `MigrationRegistry`."
   MIGRATION_REGISTRY_V5
 }
 
-"One indexed registry. Created by the first log this subgraph matches from it."
 type Contract @entity {
-  "The contract address."
   id: Bytes!
-  "What the contract is."
   kind: ContractKind!
-  """
-  The block of the first log matched from this contract. Every `startBlock` in
-  `networks.json` is at or below the block the contract was created in, so the
-  indexed history is complete.
-  """
   firstIndexedBlock: BigInt!
 }
 
-"One name bound under one authority in one `ConfigRegistry`, at its latest value; every authority is indexed."
 type ConfigBinding @entity {
-  "`registry` address ++ `authority` ++ the `bytes32` name."
   id: Bytes!
-  "The `ConfigRegistry`."
   registry: Contract!
-  "The authority the name is bound under."
   authority: Bytes!
-  "The raw `bytes32` name, as emitted. Hash a label to match it."
   name: Bytes!
-  "The value the most recent `Register` bound, byte for byte. Its encoding is agreed between the authority and its readers."
   value: Bytes!
-  "That `Register`'s `sender`: the authority, or a delegate it approved for `name`."
   sender: Bytes!
-  "Block of that `Register`."
   boundAtBlock: BigInt!
-  "The latest `Register`'s value type, null unless it hashes to `valueTypeHash`."
+  "Null unless it hashes to `valueTypeHash`: graph-node decodes the emitted string lossily."
   valueType: String
-  "The value type hash `getV5` returns at the log's block."
   valueTypeHash: Bytes!
-  "Timestamp of that block."
   boundAtTimestamp: BigInt!
-  "How many `Register` logs have bound the name under the authority, the first included."
   registerCount: Int!
-  "Every `Register` of the name under the authority, unordered: sort by `blockNumber` then `logIndex`."
   registers: [ConfigRegister!]! @derivedFrom(field: "binding")
-  "`keccak256(abi.encode(authority, name))`."
   metaSubject: Bytes!
-  "Every `MetaV1_2` under `metaSubject`."
   metas: [RegistryMeta!]! @derivedFrom(field: "configBinding")
 }
 
-"One `Register` log."
 type ConfigRegister @entity(immutable: true) {
-  "Transaction hash ++ log index."
   id: Bytes!
-  "The binding it wrote."
   binding: ConfigBinding!
-  "The caller: the authority or a delegate."
   sender: Bytes!
-  "The value bound."
   value: Bytes!
-  "The value type, null unless it hashes to `valueTypeHash`."
+  "Null unless it hashes to `valueTypeHash`: graph-node decodes the emitted string lossily."
   valueType: String
-  "The value type hash `getV5` returns at the log's block."
   valueTypeHash: Bytes!
-  "The `MetaV1_2` emitted in the same transaction."
   metas: [RegistryMeta!]! @derivedFrom(field: "configRegister")
-  "Block the log was emitted in."
   blockNumber: BigInt!
-  "Timestamp of that block."
   blockTimestamp: BigInt!
-  "Hash of the transaction the log was emitted in."
   transactionHash: Bytes!
-  "The EOA or account that submitted the transaction."
   transactionFrom: Bytes!
-  "Index of the log within its block."
   logIndex: BigInt!
 }
 
-"""
-One delegate an account has approved or revoked within one scope of a registry:
-a name under a `ConfigRegistry` authority, or a namespace under a
-`MigrationRegistry` writer. Created by the first `Approved` or `Revoked` naming
-the triple and kept after a revoke, with `approved` false.
-
-The registries emit `Approved` again for an approval that already stands and
-`Revoked` for one that never did, so neither log says the state moved; `approved`
-is the state after the most recent of them.
-"""
 type RegistryDelegate @entity {
-  "`registry` address ++ `account` ++ the `bytes32` scope ++ `delegate`."
   id: Bytes!
-  "The registry the approval is held in. Its `kind` says whether `scope` is a name or a namespace."
   registry: Contract!
-  "The approving account: the `ConfigRegistry` authority or the `MigrationRegistry` writer. The events' `sender`."
   account: Bytes!
-  "The name (`ConfigRegistry`) or namespace (`MigrationRegistry`) the approval covers."
   scope: Bytes!
-  "The approved account."
   delegate: Bytes!
-  "Whether `delegate` may write under `account` within `scope` right now."
   approved: Boolean!
-  "Block of the most recent `Approved`, null if never approved."
   approvedAtBlock: BigInt
-  "Timestamp of that block."
   approvedAtTimestamp: BigInt
-  "Block of the most recent `Revoked`, null if never revoked."
   revokedAtBlock: BigInt
-  "Timestamp of that block."
   revokedAtTimestamp: BigInt
-  "Every `Approved` and `Revoked` for the triple, unordered: sort by `blockNumber` then `logIndex`."
   changes: [RegistryDelegateChange!]! @derivedFrom(field: "registryDelegate")
 }
 
-"One `Approved` or `Revoked` log from a registry."
 type RegistryDelegateChange @entity(immutable: true) {
-  "Transaction hash ++ log index."
   id: Bytes!
-  "The approval it moved."
   registryDelegate: RegistryDelegate!
-  "True for `Approved`, false for `Revoked`."
   approved: Boolean!
-  "Block the log was emitted in."
   blockNumber: BigInt!
-  "Timestamp of that block."
   blockTimestamp: BigInt!
-  "Hash of the transaction the log was emitted in."
   transactionHash: Bytes!
-  "The EOA or account that submitted the transaction. Differs from `account` when the account is a Safe or timelock."
   transactionFrom: Bytes!
-  "Index of the log within its block."
   logIndex: BigInt!
 }
 
-"""
-One delegate an account has approved or revoked unscoped in a V5 registry: it
-may write under the account in every name (`ConfigRegistry`) or namespace
-(`MigrationRegistry`), alongside any scoped `RegistryDelegate`. Created by the
-first `ApprovedUnscoped` or `RevokedUnscoped` naming the pair and kept after a
-revoke, with `approved` false. A `RevokedUnscoped` leaves scoped approvals as
-they were.
-
-As with the scoped logs, either log is emitted whatever the prior state, so
-`approved` is the state after the most recent of them.
-"""
 type RegistryUnscopedDelegate @entity {
-  "`registry` address ++ `account` ++ `delegate`."
   id: Bytes!
-  "The registry the approval is held in."
   registry: Contract!
-  "The approving account: the `ConfigRegistry` authority or the `MigrationRegistry` writer. The events' `sender`."
   account: Bytes!
-  "The approved account."
   delegate: Bytes!
-  "Whether `delegate` may write under `account` in every scope right now."
   approved: Boolean!
-  "Block of the most recent `ApprovedUnscoped`, null if never approved."
   approvedAtBlock: BigInt
-  "Timestamp of that block."
   approvedAtTimestamp: BigInt
-  "Block of the most recent `RevokedUnscoped`, null if never revoked."
   revokedAtBlock: BigInt
-  "Timestamp of that block."
   revokedAtTimestamp: BigInt
-  "Every `ApprovedUnscoped` and `RevokedUnscoped` for the pair, unordered: sort by `blockNumber` then `logIndex`."
   changes: [RegistryUnscopedDelegateChange!]!
     @derivedFrom(field: "registryUnscopedDelegate")
 }
 
-"One `ApprovedUnscoped` or `RevokedUnscoped` log from a V5 registry."
 type RegistryUnscopedDelegateChange @entity(immutable: true) {
-  "Transaction hash ++ log index."
   id: Bytes!
-  "The approval it moved."
   registryUnscopedDelegate: RegistryUnscopedDelegate!
-  "True for `ApprovedUnscoped`, false for `RevokedUnscoped`."
   approved: Boolean!
-  "Block the log was emitted in."
   blockNumber: BigInt!
-  "Timestamp of that block."
   blockTimestamp: BigInt!
-  "Hash of the transaction the log was emitted in."
   transactionHash: Bytes!
-  "The EOA or account that submitted the transaction. Differs from `account` when the account is a Safe or timelock."
   transactionFrom: Bytes!
-  "Index of the log within its block."
   logIndex: BigInt!
 }
 
-"""
-One writer's line in one namespace of the chain's `MigrationRegistry`. Created
-by its first `Migrated`. A migration is applied at most once per line and never
-unrecorded, so the line's records in log order are its whole history and each
-record's migration is the head the next was applied onto.
-
-Every writer's lines are indexed: `Migrated` is the only way to discover one.
-Filter on `writer` and `namespace` for the line a consumer reads.
-"""
 type MigrationLine @entity {
-  "`registry` address ++ `writer` ++ the `bytes32` namespace."
   id: Bytes!
-  "The `MigrationRegistry`."
   registry: Contract!
-  "The line's writer."
   writer: Bytes!
-  "The raw `bytes32` namespace, as emitted."
   namespace: Bytes!
-  "The line's head: the migration of its most recent record."
   head: Bytes!
-  "The record `head` comes from."
   headRecord: MigrationRecord!
-  "How many records the line holds."
   recordCount: Int!
-  "Every record. Order on `index` for line order."
   records: [MigrationRecord!]! @derivedFrom(field: "line")
 }
 
-"One `Migrated` log."
 type MigrationRecord @entity(immutable: true) {
-  "Transaction hash ++ log index."
   id: Bytes!
-  "The line it was recorded in."
   line: MigrationLine!
-  "Its position in the line, from zero."
   index: Int!
-  "The raw `bytes32` migration id, as emitted."
   migration: Bytes!
-  "The head it was applied onto: the previous record's migration, or `MIGRATION_HEAD_GENESIS` for the first."
   appliedOnto: Bytes!
-  "The moment recorded against it, as emitted: when the migration ran, not when it was written down."
   appliedAt: BigInt!
-  "The account that called: the writer or a delegate it approved for the namespace."
   sender: Bytes!
-  "Block the log was emitted in."
   blockNumber: BigInt!
-  "Timestamp of that block."
   blockTimestamp: BigInt!
-  "Hash of the transaction the log was emitted in."
   transactionHash: Bytes!
-  "The EOA or account that submitted the transaction."
   transactionFrom: Bytes!
-  "Index of the log within its block."
   logIndex: BigInt!
-  "`keccak256(abi.encode(writer, namespace, migration))`."
   metaSubject: Bytes!
-  "Every `MetaV1_2` under `metaSubject`."
   metas: [RegistryMeta!]! @derivedFrom(field: "migrationRecord")
 }
 
-"One `MetaV1_2` log from a V5 registry."
 type RegistryMeta @entity(immutable: true) {
-  "Transaction hash ++ log index."
   id: Bytes!
-  "The registry that emitted it."
   registry: Contract!
-  "The log's `sender`."
   sender: Bytes!
-  "The log's `subject`, as emitted."
   subject: Bytes!
-  "The log's `meta`, byte for byte."
   meta: Bytes!
-  "The binding `subject` names, if any."
   configBinding: ConfigBinding
-  "The binding's `Register` in the same transaction, if any."
   configRegister: ConfigRegister
-  "The record `subject` names, if any."
   migrationRecord: MigrationRecord
-  "True when `meta` carries every key preimage item and each hashes to its key."
   verified: Boolean!
-  "The config name preimage, when `verified` under a `ConfigRegistry`."
   nameString: String
-  "The migration namespace preimage, when `verified` under a `MigrationRegistry`."
   namespaceString: String
-  "The migration id preimage, when `verified` under a `MigrationRegistry`."
   migrationString: String
-  "Block the log was emitted in."
   blockNumber: BigInt!
-  "Timestamp of that block."
   blockTimestamp: BigInt!
-  "Hash of the transaction the log was emitted in."
   transactionHash: Bytes!
-  "The EOA or account that submitted the transaction."
   transactionFrom: Bytes!
-  "Index of the log within its block."
   logIndex: BigInt!
 }
 
-"Internal: the write a V5 `MetaV1_2` subject names."
 type RegistryMetaSubject @entity {
-  "`registry` address ++ `subject`."
   id: Bytes!
-  "The binding, under a `ConfigRegistry`."
   configBinding: ConfigBinding
-  "The binding's most recent `Register`."
   configRegister: ConfigRegister
-  "The record, under a `MigrationRegistry`."
   migrationRecord: MigrationRecord
 }

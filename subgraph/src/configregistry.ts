@@ -32,21 +32,10 @@ export function configBindingId(
   return registry.concat(authority).concat(name);
 }
 
-/**
- * The `IConfigRegistryV5` `MetaV1_2` subject for a binding:
- * `keccak256(abi.encode(authority, name))`.
- */
 export function configMetaSubject(authority: Bytes, name: Bytes): Bytes {
   return registryMetaSubject(addressWord(authority).concat(name));
 }
 
-/**
- * Record one `Register` and move the binding to its value. The most recent
- * `Register` for an (authority, name) is the binding `getV5` answers, so the
- * log is the whole truth. `registerCount` moves only for a log not seen
- * before: a replay of the same log rewrites the same `ConfigRegister` row and
- * must not count twice.
- */
 export function handleConfigRegistryV5Register(event: Register): void {
   let rowId = logRowId(event);
   if (ConfigRegister.load(rowId) !== null) {
