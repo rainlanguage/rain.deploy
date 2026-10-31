@@ -71,6 +71,24 @@
       "startBlock": 130326266
     }
   },
+  "flare": {
+    "ConfigRegistry": {
+      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
+      "startBlock": 72700890
+    },
+    "MigrationRegistry": {
+      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
+      "startBlock": 72701822
+    },
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 73190792
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 73191741
+    }
+  },
   "mainnet": {
     "ConfigRegistry": {
       "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
