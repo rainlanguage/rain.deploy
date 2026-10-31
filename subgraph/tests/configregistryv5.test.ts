@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: LicenseRef-DCL-1.0
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-import { afterEach, assert, clearStore, describe, test } from "matchstick-as";
-import { Address, Bytes, ethereum } from "@graphprotocol/graph-ts";
+import {
+  afterEach,
+  assert,
+  clearStore,
+  createMockedFunction,
+  describe,
+  test,
+} from "matchstick-as";
+import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import {
   ConfigBinding,
   ConfigRegister,
   RegistryMeta,
 } from "../generated/schema";
-import { Register } from "../generated/ConfigRegistry/ConfigRegistry";
 import {
   Approved,
   ApprovedUnscoped,
   MetaV1_2,
-  Register as RegisterV5,
+  Register,
   Revoked,
   RevokedUnscoped,
 } from "../generated/ConfigRegistryV5/ConfigRegistryV5";
 import {
-  handleConfigRegistryRegister,
   handleConfigRegistryV5Approved,
   handleConfigRegistryV5ApprovedUnscoped,
   handleConfigRegistryV5MetaV1_2,
@@ -31,7 +36,6 @@ import {
   inTx,
   metaV1_2Log,
   mockRowId,
-  registerLog,
   registerV5Log,
   TX_FROM,
   TX_HASH,
@@ -39,7 +43,6 @@ import {
 } from "./event-mocks.test";
 
 const REGISTRY = "0xdc3909127e51dcb3ab7d43eee585dd351f77c285";
-const REGISTRY_V3 = "0x2f1f82c65cce305df3950f8af8fa5ad6d9a815e8";
 const OTHER_REGISTRY = "0x00000000000000000000000000000000000000e5";
 /** st0x `LibStoxConfig.ROOT_AUTHORITY`. */
 const AUTHORITY = "0x0b300013cd54a8f1ac40981f80faaa18b8cc1e4c";
@@ -59,6 +62,12 @@ const ADDRESS_HASH =
 /** `keccak256("(address,uint256)")`, from `cast keccak`. */
 const TUPLE_HASH =
   "0x4c8216942579564ee54f26005a991364c7f94438571b448bf6d3278d139e0fdf";
+/** `keccak256("uint256")`, from `cast keccak`. */
+const UINT256_HASH =
+  "0xec13d6d12b88433319b64e1065a96ea19cd330ef6603f5f6fb685dde3959a320";
+/** `keccak256("address\0")`, from `cast keccak 0x6164647265737300`; graph-node decodes that type as "address". */
+const ADDRESS_NUL_HASH =
+  "0x10d5143a6a8e25b3b61a3d97a427cd32e5ae62c0df92e99ec1c3f99a6cf2a693";
 const VALUE_A =
   "0x0000000000000000000000000000000000000000000000000000000000000a01";
 const VALUE_B =
@@ -74,6 +83,7 @@ const NAME_US = "a2004f737430782e726261632e75732e7631011bffcdcfae6227d5e9";
 const NAME_EU = "a2004f737430782e726261632e65752e7631011bffcdcfae6227d5e9";
 const TYPE_ADDRESS = "a2004761646472657373011bffcdb2cc1b1d53be";
 const TYPE_UINT256 = "a2004775696e74323536011bffcdb2cc1b1d53be";
+const TYPE_ADDRESS_NUL = "a200486164647265737300011bffcdb2cc1b1d53be";
 const META_OK = P.concat(NAME_US).concat(TYPE_ADDRESS);
 /** A rainlang source item, the type, then the name with `identity` encoding. */
 const META_FOREIGN = P.concat("a200455f3a20313b011bff13109e41336ff2")
@@ -180,21 +190,73 @@ function rowIdIn(tx: string, logIndex: i32): string {
   return tx.concat(low).concat("000000");
 }
 
-function registerEvent(
+// The hash the registry stores and `getV5` returns: keccak256 of the type's raw bytes.
+function storedTypeHash(valueType: string): string {
+  if (valueType == "address") return ADDRESS_HASH;
+  if (valueType == "(address,uint256)") return TUPLE_HASH;
+  assert.stringEquals(valueType, "uint256");
+  return UINT256_HASH;
+}
+
+function registerStoring(
+  tx: string,
+  sender: string,
+  name: string,
+  valueType: string,
+  typeHash: string,
+  value: string,
+  blockNumber: i32,
+  logIndex: i32,
+): void {
+  createMockedFunction(
+    Address.fromString(REGISTRY),
+    "getV5",
+    "getV5(address,bytes32):(bytes,uint256,bytes32)",
+  )
+    .withArgs([
+      ethereum.Value.fromAddress(Address.fromString(AUTHORITY)),
+      ethereum.Value.fromFixedBytes(Bytes.fromHexString(name)),
+    ])
+    .returns([
+      ethereum.Value.fromBytes(Bytes.fromHexString(value)),
+      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(blockNumber * 12)),
+      ethereum.Value.fromFixedBytes(Bytes.fromHexString(typeHash)),
+    ]);
+  handleConfigRegistryV5Register(
+    changetype<Register>(
+      inTx(
+        registerV5Log(
+          Address.fromString(REGISTRY),
+          Address.fromString(sender),
+          Address.fromString(AUTHORITY),
+          Bytes.fromHexString(name),
+          valueType,
+          Bytes.fromHexString(value),
+          blockNumber,
+          logIndex,
+        ),
+        Bytes.fromHexString(tx),
+      ),
+    ),
+  );
+}
+
+function registerIn(
+  tx: string,
   sender: string,
   name: string,
   valueType: string,
   value: string,
   blockNumber: i32,
   logIndex: i32,
-): ethereum.Event {
-  return registerV5Log(
-    Address.fromString(REGISTRY),
-    Address.fromString(sender),
-    Address.fromString(AUTHORITY),
-    Bytes.fromHexString(name),
+): void {
+  registerStoring(
+    tx,
+    sender,
+    name,
     valueType,
-    Bytes.fromHexString(value),
+    storedTypeHash(valueType),
+    value,
     blockNumber,
     logIndex,
   );
@@ -208,10 +270,14 @@ function register(
   blockNumber: i32,
   logIndex: i32,
 ): void {
-  handleConfigRegistryV5Register(
-    changetype<RegisterV5>(
-      registerEvent(sender, name, valueType, value, blockNumber, logIndex),
-    ),
+  registerIn(
+    TX_HASH.toHexString(),
+    sender,
+    name,
+    valueType,
+    value,
+    blockNumber,
+    logIndex,
   );
 }
 
@@ -288,17 +354,96 @@ describe("ConfigRegistryV5 Register", () => {
     assert.fieldEquals("Contract", REGISTRY, "firstIndexedBlock", "100");
   });
 
-  test("the type hash is keccak256 of the emitted type", () => {
+  test("a tuple type that hashes to the stored type hash is kept", () => {
     register(AUTHORITY, US_NAME, "(address,uint256)", VALUE_B, 100, 3);
 
     let id = bindingId(REGISTRY, AUTHORITY, US_NAME);
+    assert.fieldEquals("ConfigBinding", id, "valueType", "(address,uint256)");
     assert.fieldEquals("ConfigBinding", id, "valueTypeHash", TUPLE_HASH);
+    assert.fieldEquals(
+      "ConfigRegister",
+      mockRowId(3),
+      "valueType",
+      "(address,uint256)",
+    );
     assert.fieldEquals(
       "ConfigRegister",
       mockRowId(3),
       "valueTypeHash",
       TUPLE_HASH,
     );
+  });
+
+  test("the type hash is the one getV5 returns, not keccak256 of the decoded type", () => {
+    registerStoring(
+      TX_HASH.toHexString(),
+      AUTHORITY,
+      US_NAME,
+      "address",
+      ADDRESS_NUL_HASH,
+      VALUE_A,
+      100,
+      3,
+    );
+
+    let id = bindingId(REGISTRY, AUTHORITY, US_NAME);
+    assert.fieldEquals("ConfigBinding", id, "valueTypeHash", ADDRESS_NUL_HASH);
+    assert.fieldEquals(
+      "ConfigRegister",
+      mockRowId(3),
+      "valueTypeHash",
+      ADDRESS_NUL_HASH,
+    );
+  });
+
+  test("a decoded type that does not hash to the stored type hash is null", () => {
+    registerStoring(
+      TX_HASH.toHexString(),
+      AUTHORITY,
+      US_NAME,
+      "address",
+      ADDRESS_NUL_HASH,
+      VALUE_A,
+      100,
+      3,
+    );
+
+    let binding = ConfigBinding.load(
+      Bytes.fromHexString(bindingId(REGISTRY, AUTHORITY, US_NAME)),
+    )!;
+    assert.assertNull<string | null>(binding.valueType);
+    let row = ConfigRegister.load(Bytes.fromHexString(mockRowId(3)))!;
+    assert.assertNull<string | null>(row.valueType);
+    assert.bytesEquals(row.value, Bytes.fromHexString(VALUE_A));
+  });
+
+  test("a rebind whose decoded type misses the stored hash clears the binding's type", () => {
+    register(AUTHORITY, US_NAME, "address", VALUE_A, 100, 3);
+    registerStoring(
+      OTHER_TX,
+      AUTHORITY,
+      US_NAME,
+      "address",
+      ADDRESS_NUL_HASH,
+      VALUE_B,
+      250,
+      1,
+    );
+
+    let id = bindingId(REGISTRY, AUTHORITY, US_NAME);
+    let binding = ConfigBinding.load(Bytes.fromHexString(id))!;
+    assert.assertNull<string | null>(binding.valueType);
+    assert.fieldEquals("ConfigBinding", id, "valueTypeHash", ADDRESS_NUL_HASH);
+    assert.fieldEquals("ConfigBinding", id, "value", VALUE_B);
+    assert.fieldEquals("ConfigRegister", mockRowId(3), "valueType", "address");
+    assert.fieldEquals(
+      "ConfigRegister",
+      mockRowId(3),
+      "valueTypeHash",
+      ADDRESS_HASH,
+    );
+    let rebind = ConfigRegister.load(Bytes.fromHexString(rowIdIn(OTHER_TX, 1)))!;
+    assert.assertNull<string | null>(rebind.valueType);
   });
 
   test("a rebind as another type moves the type and keeps each row's own", () => {
@@ -347,44 +492,6 @@ describe("ConfigRegistryV5 Register", () => {
     assert.fieldEquals("ConfigBinding", id, "registerCount", "2");
     assert.entityCount("ConfigRegister", 2);
   });
-
-  test("a V3 and a V5 binding of one name are separate rows, the V3 one untyped", () => {
-    handleConfigRegistryRegister(
-      changetype<Register>(
-        registerLog(
-          Address.fromString(REGISTRY_V3),
-          Address.fromString(AUTHORITY),
-          Address.fromString(AUTHORITY),
-          Bytes.fromHexString(US_NAME),
-          Bytes.fromHexString(VALUE_B),
-          90,
-          0,
-        ),
-      ),
-    );
-    register(AUTHORITY, US_NAME, "address", VALUE_A, 100, 3);
-
-    assert.entityCount("ConfigBinding", 2);
-    assert.entityCount("Contract", 2);
-    assert.fieldEquals("Contract", REGISTRY_V3, "kind", "CONFIG_REGISTRY");
-    assert.fieldEquals("Contract", REGISTRY, "kind", "CONFIG_REGISTRY_V5");
-    let v3 = ConfigBinding.load(
-      Bytes.fromHexString(bindingId(REGISTRY_V3, AUTHORITY, US_NAME)),
-    )!;
-    assert.bytesEquals(v3.value, Bytes.fromHexString(VALUE_B));
-    assert.assertTrue(v3.valueType === null);
-    assert.assertTrue(v3.valueTypeHash === null);
-    assert.assertTrue(v3.metaSubject === null);
-    let v3Row = ConfigRegister.load(Bytes.fromHexString(mockRowId(0)))!;
-    assert.assertTrue(v3Row.valueType === null);
-    assert.assertTrue(v3Row.valueTypeHash === null);
-    assert.fieldEquals(
-      "ConfigBinding",
-      bindingId(REGISTRY, AUTHORITY, US_NAME),
-      "value",
-      VALUE_A,
-    );
-  });
 });
 
 describe("ConfigRegistryV5 MetaV1_2", () => {
@@ -430,21 +537,7 @@ describe("ConfigRegistryV5 MetaV1_2", () => {
   test("a rebind's meta links to the rebind's Register, not the first", () => {
     register(AUTHORITY, US_NAME, "address", VALUE_A, 100, 3);
     meta(US_SUBJECT, META, 100, 4);
-    handleConfigRegistryV5Register(
-      changetype<RegisterV5>(
-        inTx(
-          registerEvent(
-            AUTHORITY,
-            US_NAME,
-            "(address,uint256)",
-            VALUE_B,
-            250,
-            1,
-          ),
-          Bytes.fromHexString(OTHER_TX),
-        ),
-      ),
-    );
+    registerIn(OTHER_TX, AUTHORITY, US_NAME, "(address,uint256)", VALUE_B, 250, 1);
     handleConfigRegistryV5MetaV1_2(
       changetype<MetaV1_2>(
         inTx(
@@ -520,14 +613,7 @@ describe("ConfigRegistryV5 MetaV1_2", () => {
   test("a replayed meta keeps the Register it was first linked to", () => {
     register(AUTHORITY, US_NAME, "address", VALUE_A, 100, 3);
     meta(US_SUBJECT, META_OK, 100, 4);
-    handleConfigRegistryV5Register(
-      changetype<RegisterV5>(
-        inTx(
-          registerEvent(AUTHORITY, US_NAME, "address", VALUE_B, 250, 1),
-          Bytes.fromHexString(OTHER_TX),
-        ),
-      ),
-    );
+    registerIn(OTHER_TX, AUTHORITY, US_NAME, "address", VALUE_B, 250, 1);
     meta(US_SUBJECT, META_OK, 100, 4);
 
     assert.fieldEquals(
@@ -541,14 +627,7 @@ describe("ConfigRegistryV5 MetaV1_2", () => {
 
   test("a replayed Register leaves the subject on the latest Register", () => {
     register(AUTHORITY, US_NAME, "address", VALUE_A, 100, 3);
-    handleConfigRegistryV5Register(
-      changetype<RegisterV5>(
-        inTx(
-          registerEvent(AUTHORITY, US_NAME, "address", VALUE_B, 250, 1),
-          Bytes.fromHexString(OTHER_TX),
-        ),
-      ),
-    );
+    registerIn(OTHER_TX, AUTHORITY, US_NAME, "address", VALUE_B, 250, 1);
     register(AUTHORITY, US_NAME, "address", VALUE_A, 100, 3);
     handleConfigRegistryV5MetaV1_2(
       changetype<MetaV1_2>(
@@ -626,6 +705,24 @@ describe("ConfigRegistryV5 MetaV1_2 verification", () => {
 
   test("the value type is checked against this Register's type", () => {
     assert.stringEquals(verifiedFor(META_OK, "uint256"), UNVERIFIED);
+  });
+
+  test("the value type preimage is checked against the stored type hash", () => {
+    registerStoring(
+      TX_HASH.toHexString(),
+      AUTHORITY,
+      US_NAME,
+      "address",
+      ADDRESS_NUL_HASH,
+      VALUE_A,
+      100,
+      3,
+    );
+    meta(US_SUBJECT, P.concat(NAME_US).concat(TYPE_ADDRESS_NUL), 100, 4);
+    meta(US_SUBJECT, META_OK, 100, 5);
+
+    assert.fieldEquals("RegistryMeta", mockRowId(4), "verified", "true");
+    assert.fieldEquals("RegistryMeta", mockRowId(5), "verified", "false");
   });
 
   test("a missing name or value type item does not verify", () => {

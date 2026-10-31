@@ -3,8 +3,7 @@
 
 import { afterEach, assert, clearStore, describe, test } from "matchstick-as";
 import { Address, Bytes } from "@graphprotocol/graph-ts";
-import { MigrationRecord, RegistryMeta } from "../generated/schema";
-import { Migrated } from "../generated/MigrationRegistry/MigrationRegistry";
+import { RegistryMeta } from "../generated/schema";
 import {
   Approved,
   ApprovedUnscoped,
@@ -14,7 +13,6 @@ import {
   RevokedUnscoped,
 } from "../generated/MigrationRegistryV5/MigrationRegistryV5";
 import {
-  handleMigrationRegistryMigrated,
   handleMigrationRegistryV5Approved,
   handleMigrationRegistryV5ApprovedUnscoped,
   handleMigrationRegistryV5MetaV1_2,
@@ -33,7 +31,6 @@ import {
 } from "./event-mocks.test";
 
 const REGISTRY = "0x1a4b89828eb2dd5f3a353bd98472512f371ce408";
-const REGISTRY_V3 = "0x5a48e719785e11c4643ea4056d0861a6a69e91a0";
 const WRITER = "0x0b300013cd54a8f1ac40981f80faaa18b8cc1e4c";
 const SAFE = "0x00000000000000000000000000000000000000d1";
 /** `keccak256("st0x.deploy")`, from `cast keccak`: `LibStoxMigrations.NAMESPACE`. */
@@ -143,36 +140,6 @@ describe("MigrationRegistryV5 Migrated", () => {
     assert.fieldEquals("MigrationLine", lineId(REGISTRY), "head", MIGRATION_2);
     assert.fieldEquals("MigrationLine", lineId(REGISTRY), "recordCount", "2");
     assert.entityCount("MigrationRecord", 2);
-  });
-
-  test("a V3 line of the same writer and namespace is its own line, with no meta subject", () => {
-    handleMigrationRegistryMigrated(
-      changetype<Migrated>(
-        migratedLog(
-          Address.fromString(REGISTRY_V3),
-          Address.fromString(SAFE),
-          Address.fromString(WRITER),
-          Bytes.fromHexString(NAMESPACE),
-          Bytes.fromHexString(MIGRATION_1),
-          1000,
-          90,
-          5,
-        ),
-      ),
-    );
-    migrate(MIGRATION_1, 100, 2);
-
-    assert.entityCount("MigrationLine", 2);
-    assert.fieldEquals(
-      "MigrationLine",
-      lineId(REGISTRY_V3),
-      "recordCount",
-      "1",
-    );
-    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "recordCount", "1");
-    assert.fieldEquals("Contract", REGISTRY_V3, "kind", "MIGRATION_REGISTRY");
-    let v3 = MigrationRecord.load(Bytes.fromHexString(mockRowId(5)))!;
-    assert.assertTrue(v3.metaSubject === null);
   });
 });
 
