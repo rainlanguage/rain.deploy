@@ -4,6 +4,7 @@
 import { Bytes, crypto } from "@graphprotocol/graph-ts";
 import {
   Approved,
+  ConfigRegistryV5,
   ApprovedUnscoped,
   MetaV1_2,
   Register,
@@ -53,10 +54,16 @@ export function handleConfigRegistryV5Register(event: Register): void {
   }
   let authority = event.params.authority;
   let name = event.params.name;
-  let valueType = event.params.valueType;
-  let valueTypeHash = Bytes.fromByteArray(
-    crypto.keccak256(Bytes.fromUTF8(valueType)),
-  );
+  let valueTypeHash = ConfigRegistryV5.bind(event.address)
+    .getV5(authority, name).value2;
+  let valueType: string | null = event.params.valueType;
+  if (
+    !Bytes.fromByteArray(
+      crypto.keccak256(Bytes.fromUTF8(event.params.valueType)),
+    ).equals(valueTypeHash)
+  ) {
+    valueType = null;
+  }
   let subject = configMetaSubject(authority, name);
   let registry = getOrCreateContract(
     event.address,

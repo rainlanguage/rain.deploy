@@ -44,9 +44,9 @@ type ConfigBinding @entity {
   sender: Bytes!
   "Block of that `Register`."
   boundAtBlock: BigInt!
-  "The latest `Register`'s value type."
-  valueType: String!
-  "`keccak256` of `valueType`."
+  "The latest `Register`'s value type, null unless it hashes to `valueTypeHash`."
+  valueType: String
+  "The value type hash `getV5` returns at the log's block."
   valueTypeHash: Bytes!
   "Timestamp of that block."
   boundAtTimestamp: BigInt!
@@ -70,9 +70,9 @@ type ConfigRegister @entity(immutable: true) {
   sender: Bytes!
   "The value bound."
   value: Bytes!
-  "The value type, as emitted."
-  valueType: String!
-  "`keccak256` of `valueType`."
+  "The value type, null unless it hashes to `valueTypeHash`."
+  valueType: String
+  "The value type hash `getV5` returns at the log's block."
   valueTypeHash: Bytes!
   "The `MetaV1_2` emitted in the same transaction."
   metas: [RegistryMeta!]! @derivedFrom(field: "configRegister")
