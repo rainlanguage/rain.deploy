@@ -1,0 +1,139 @@
+      abis:
+        - name: ST0xOrchestratorBeaconSetDeployer
+          file: ./abis/ST0xOrchestratorBeaconSetDeployer.json
+      eventHandlers:
+        - event: Deployment(indexed address,indexed address,address)
+          handler: handleOrchestratorDeployment
+      file: ./src/orchestratordeployer.ts
+  - kind: ethereum/contract
+    name: ConfigRegistry
+    network: robinhood
+    source:
+      abi: ConfigRegistry
+      address: "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8"
+      startBlock: 95041555
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Contract
+        - ConfigBinding
+        - ConfigRegister
+        - RegistryDelegate
+        - RegistryDelegateChange
+      abis:
+        - name: ConfigRegistry
+          file: ./abis/ConfigRegistry.json
+      eventHandlers:
+        - event: Register(address,address,bytes32,bytes)
+          handler: handleConfigRegistryRegister
+        - event: Approved(address,bytes32,address)
+          handler: handleConfigRegistryApproved
+        - event: Revoked(address,bytes32,address)
+          handler: handleConfigRegistryRevoked
+      file: ./src/configregistry.ts
+  - kind: ethereum/contract
+    name: MigrationRegistry
+    network: robinhood
+    source:
+      abi: MigrationRegistry
+      address: "0x5A48e719785E11c4643EA4056D0861A6a69e91a0"
+      startBlock: 95041555
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Contract
+        - MigrationLine
+        - MigrationRecord
+        - RegistryDelegate
+        - RegistryDelegateChange
+      abis:
+        - name: MigrationRegistry
+          file: ./abis/MigrationRegistry.json
+      eventHandlers:
+        - event: Migrated(address,address,bytes32,bytes32,uint256)
+          handler: handleMigrationRegistryMigrated
+        - event: Approved(address,bytes32,address)
+          handler: handleMigrationRegistryApproved
+        - event: Revoked(address,bytes32,address)
+          handler: handleMigrationRegistryRevoked
+      file: ./src/migrationregistry.ts
+  - kind: ethereum/contract
+    name: ConfigRegistryV5
+    network: robinhood
+    source:
+      abi: ConfigRegistryV5
+      address: "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9"
+      startBlock: 100259389
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Contract
+        - ConfigBinding
+        - ConfigRegister
+        - RegistryDelegate
+        - RegistryDelegateChange
+        - RegistryUnscopedDelegate
+        - RegistryUnscopedDelegateChange
+        - RegistryMeta
+        - RegistryMetaSubject
+      abis:
+        - name: ConfigRegistryV5
+          file: ./abis/ConfigRegistryV5.json
+      eventHandlers:
+        - event: Register(address,address,bytes32,string,bytes)
+          handler: handleConfigRegistryV5Register
+        - event: Approved(address,bytes32,address)
+          handler: handleConfigRegistryV5Approved
+        - event: Revoked(address,bytes32,address)
+          handler: handleConfigRegistryV5Revoked
+        - event: ApprovedUnscoped(address,address)
+          handler: handleConfigRegistryV5ApprovedUnscoped
+        - event: RevokedUnscoped(address,address)
+          handler: handleConfigRegistryV5RevokedUnscoped
+        - event: MetaV1_2(address,bytes32,bytes)
+          handler: handleConfigRegistryV5MetaV1_2
+      file: ./src/configregistry.ts
+  - kind: ethereum/contract
+    name: MigrationRegistryV5
+    network: robinhood
+    source:
+      abi: MigrationRegistryV5
+      address: "0xd708186f68D527B64c001398550627508205EE31"
+      startBlock: 100268990
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Contract
+        - MigrationLine
+        - MigrationRecord
+        - RegistryDelegate
+        - RegistryDelegateChange
+        - RegistryUnscopedDelegate
+        - RegistryUnscopedDelegateChange
+        - RegistryMeta
+        - RegistryMetaSubject
+      abis:
+        - name: MigrationRegistryV5
+          file: ./abis/MigrationRegistryV5.json
+      eventHandlers:
+        - event: Migrated(address,address,bytes32,bytes32,uint256)
+          handler: handleMigrationRegistryV5Migrated
+        - event: Approved(address,bytes32,address)
+          handler: handleMigrationRegistryV5Approved
+        - event: Revoked(address,bytes32,address)
+          handler: handleMigrationRegistryV5Revoked
+        - event: ApprovedUnscoped(address,address)
+          handler: handleMigrationRegistryV5ApprovedUnscoped
+        - event: RevokedUnscoped(address,address)
+          handler: handleMigrationRegistryV5RevokedUnscoped
+        - event: MetaV1_2(address,bytes32,bytes)
+          handler: handleMigrationRegistryV5MetaV1_2
+      file: ./src/migrationregistry.ts
