@@ -1,0 +1,38 @@
+name: Registry Subgraph CI
+on: [push]
+concurrency:
+  group: ${{ github.ref }}-subgraph-test
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          # restore and save a cache using this key
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          # if there's no cache hit, restore a cache by this prefix
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 1G
+      - name: Install soldeer dependencies
+        run: nix develop github:rainlanguage/rainix#sol-shell -c forge soldeer install
+      - name: Generate subgraph types
+        run: nix develop -c forge build && nix develop github:rainlanguage/rainix/9f0a4c37c587872b40cd0b9c77c23818b2a6b5b2#subgraph-shell -c bash -c 'cd subgraph && npm ci && graph codegen'
+      - name: Matchstick tests
+        run: nix develop github:rainlanguage/rainix/9f0a4c37c587872b40cd0b9c77c23818b2a6b5b2#subgraph-shell -c subgraph-test

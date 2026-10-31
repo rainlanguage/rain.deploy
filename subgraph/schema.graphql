@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: LicenseRef-DCL-1.0
+# SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+
+enum ContractKind {
+  CONFIG_REGISTRY_V5
+  MIGRATION_REGISTRY_V5
+}
+
+type Contract @entity {
+  id: Bytes!
+  kind: ContractKind!
+  firstIndexedBlock: BigInt!
+}
+
+type ConfigBinding @entity {
+  id: Bytes!
+  registry: Contract!
+  authority: Bytes!
+  name: Bytes!
+  value: Bytes!
+  sender: Bytes!
+  boundAtBlock: BigInt!
+  "Null unless it hashes to `valueTypeHash`: graph-node decodes the emitted string lossily."
+  valueType: String
+  valueTypeHash: Bytes!
+  boundAtTimestamp: BigInt!
+  registerCount: Int!
+  registers: [ConfigRegister!]! @derivedFrom(field: "binding")
+  metaSubject: Bytes!
+  metas: [RegistryMeta!]! @derivedFrom(field: "configBinding")
+}
+
+type ConfigRegister @entity(immutable: true) {
+  id: Bytes!
+  binding: ConfigBinding!
+  sender: Bytes!
+  value: Bytes!
+  "Null unless it hashes to `valueTypeHash`: graph-node decodes the emitted string lossily."
+  valueType: String
+  valueTypeHash: Bytes!
+  metas: [RegistryMeta!]! @derivedFrom(field: "configRegister")
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  transactionFrom: Bytes!
+  logIndex: BigInt!
+}
+
+type RegistryDelegate @entity {
+  id: Bytes!
+  registry: Contract!
+  account: Bytes!
+  scope: Bytes!
+  delegate: Bytes!
+  approved: Boolean!
+  approvedAtBlock: BigInt
+  approvedAtTimestamp: BigInt
+  revokedAtBlock: BigInt
+  revokedAtTimestamp: BigInt
+  changes: [RegistryDelegateChange!]! @derivedFrom(field: "registryDelegate")
+}
+
+type RegistryDelegateChange @entity(immutable: true) {
+  id: Bytes!
+  registryDelegate: RegistryDelegate!
+  approved: Boolean!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  transactionFrom: Bytes!
+  logIndex: BigInt!
+}
+
+type RegistryUnscopedDelegate @entity {
+  id: Bytes!
+  registry: Contract!
+  account: Bytes!
+  delegate: Bytes!
+  approved: Boolean!
+  approvedAtBlock: BigInt
+  approvedAtTimestamp: BigInt
+  revokedAtBlock: BigInt
+  revokedAtTimestamp: BigInt
+  changes: [RegistryUnscopedDelegateChange!]!
+    @derivedFrom(field: "registryUnscopedDelegate")
+}
+
+type RegistryUnscopedDelegateChange @entity(immutable: true) {
+  id: Bytes!
+  registryUnscopedDelegate: RegistryUnscopedDelegate!
+  approved: Boolean!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  transactionFrom: Bytes!
+  logIndex: BigInt!
+}
+
+type MigrationLine @entity {
+  id: Bytes!
+  registry: Contract!
+  writer: Bytes!
+  namespace: Bytes!
+  head: Bytes!
+  headRecord: MigrationRecord!
+  recordCount: Int!
+  records: [MigrationRecord!]! @derivedFrom(field: "line")
+}
+
+type MigrationRecord @entity(immutable: true) {
+  id: Bytes!
+  line: MigrationLine!
+  index: Int!
+  migration: Bytes!
+  appliedOnto: Bytes!
+  appliedAt: BigInt!
+  sender: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  transactionFrom: Bytes!
+  logIndex: BigInt!
+  metaSubject: Bytes!
+  metas: [RegistryMeta!]! @derivedFrom(field: "migrationRecord")
+}
+
+type RegistryMeta @entity(immutable: true) {
+  id: Bytes!
+  registry: Contract!
+  sender: Bytes!
+  subject: Bytes!
+  meta: Bytes!
+  configBinding: ConfigBinding
+  configRegister: ConfigRegister
+  migrationRecord: MigrationRecord
+  verified: Boolean!
+  nameString: String
+  namespaceString: String
+  migrationString: String
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+  transactionFrom: Bytes!
+  logIndex: BigInt!
+}
+
+type RegistryMetaSubject @entity {
+  id: Bytes!
+  configBinding: ConfigBinding
+  configRegister: ConfigRegister
+  migrationRecord: MigrationRecord
+}
