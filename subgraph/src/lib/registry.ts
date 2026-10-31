@@ -240,13 +240,9 @@ function preimageChecks(row: RegistryMeta): PreimageCheck[] | null {
   if (registerId !== null) {
     let register = ConfigRegister.load(registerId)!;
     let binding = ConfigBinding.load(register.binding)!;
-    let valueTypeHash = register.valueTypeHash;
-    if (valueTypeHash === null) {
-      return null;
-    }
     return [
       new PreimageCheck(CONFIG_REGISTRY_NAME_V1, binding.name),
-      new PreimageCheck(CONFIG_REGISTRY_VALUE_TYPE_V1, valueTypeHash),
+      new PreimageCheck(CONFIG_REGISTRY_VALUE_TYPE_V1, register.valueTypeHash),
     ];
   }
   let recordId = row.migrationRecord;

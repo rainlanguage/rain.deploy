@@ -8,10 +8,6 @@
 
 "What kind of contract a `Contract` row describes."
 enum ContractKind {
-  "The chain's V3 `ConfigRegistry`."
-  CONFIG_REGISTRY
-  "The chain's V3 `MigrationRegistry`."
-  MIGRATION_REGISTRY
   "The chain's V5 `ConfigRegistry`."
   CONFIG_REGISTRY_V5
   "The chain's V5 `MigrationRegistry`."
@@ -48,18 +44,18 @@ type ConfigBinding @entity {
   sender: Bytes!
   "Block of that `Register`."
   boundAtBlock: BigInt!
-  "The latest `Register`'s value type. Null under V3."
-  valueType: String
-  "`keccak256` of `valueType`. Null under V3."
-  valueTypeHash: Bytes
+  "The latest `Register`'s value type."
+  valueType: String!
+  "`keccak256` of `valueType`."
+  valueTypeHash: Bytes!
   "Timestamp of that block."
   boundAtTimestamp: BigInt!
   "How many `Register` logs have bound the name under the authority, the first included."
   registerCount: Int!
   "Every `Register` of the name under the authority, unordered: sort by `blockNumber` then `logIndex`."
   registers: [ConfigRegister!]! @derivedFrom(field: "binding")
-  "`keccak256(abi.encode(authority, name))`. Null under V3."
-  metaSubject: Bytes
+  "`keccak256(abi.encode(authority, name))`."
+  metaSubject: Bytes!
   "Every `MetaV1_2` under `metaSubject`."
   metas: [RegistryMeta!]! @derivedFrom(field: "configBinding")
 }
@@ -74,10 +70,10 @@ type ConfigRegister @entity(immutable: true) {
   sender: Bytes!
   "The value bound."
   value: Bytes!
-  "The value type, as emitted. Null under V3."
-  valueType: String
-  "`keccak256` of `valueType`. Null under V3."
-  valueTypeHash: Bytes
+  "The value type, as emitted."
+  valueType: String!
+  "`keccak256` of `valueType`."
+  valueTypeHash: Bytes!
   "The `MetaV1_2` emitted in the same transaction."
   metas: [RegistryMeta!]! @derivedFrom(field: "configRegister")
   "Block the log was emitted in."
@@ -220,7 +216,7 @@ type MigrationLine @entity {
   writer: Bytes!
   "The raw `bytes32` namespace, as emitted."
   namespace: Bytes!
-  "The line's head: the migration of its most recent record. `headV3` answers the same."
+  "The line's head: the migration of its most recent record."
   head: Bytes!
   "The record `head` comes from."
   headRecord: MigrationRecord!
@@ -256,8 +252,8 @@ type MigrationRecord @entity(immutable: true) {
   transactionFrom: Bytes!
   "Index of the log within its block."
   logIndex: BigInt!
-  "`keccak256(abi.encode(writer, namespace, migration))`. Null under V3."
-  metaSubject: Bytes
+  "`keccak256(abi.encode(writer, namespace, migration))`."
+  metaSubject: Bytes!
   "Every `MetaV1_2` under `metaSubject`."
   metas: [RegistryMeta!]! @derivedFrom(field: "migrationRecord")
 }

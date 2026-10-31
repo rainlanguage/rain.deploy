@@ -1,13 +1,5 @@
 {
   "arbitrum-one": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 517197185
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 517200933
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 519115682
@@ -18,14 +10,6 @@
     }
   },
   "base": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 52937709
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 52938247
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 53210195
@@ -36,14 +20,6 @@
     }
   },
   "base-sepolia": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 48714489
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 48719868
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 51439343
@@ -54,14 +30,6 @@
     }
   },
   "bsc": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 129113681
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 129116072
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 130324009
@@ -72,14 +40,6 @@
     }
   },
   "flare": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 72700890
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 72701822
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 73190792
@@ -90,14 +50,6 @@
     }
   },
   "mainnet": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 26247545
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 26247634
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 26292829
@@ -108,14 +60,6 @@
     }
   },
   "hyperevm": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 49214950
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 49216048
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 49768958
@@ -126,14 +70,6 @@
     }
   },
   "matic": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 95972969
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 95973690
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 96336285
@@ -144,14 +80,6 @@
     }
   },
   "robinhood": {
-    "ConfigRegistry": {
-      "address": "0x2F1f82c65cce305Df3950F8aF8Fa5aD6D9a815e8",
-      "startBlock": 95042307
-    },
-    "MigrationRegistry": {
-      "address": "0x5A48e719785E11c4643EA4056D0861A6a69e91a0",
-      "startBlock": 95052559
-    },
     "ConfigRegistryV5": {
       "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
       "startBlock": 100259389

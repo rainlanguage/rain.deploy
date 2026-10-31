@@ -1,24 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-DCL-1.0
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-import {
-  BigInt,
-  ByteArray,
-  Bytes,
-  crypto,
-  ethereum,
-} from "@graphprotocol/graph-ts";
+import { ByteArray, Bytes, crypto } from "@graphprotocol/graph-ts";
 import {
   Approved,
-  Migrated,
-  Revoked,
-} from "../generated/MigrationRegistry/MigrationRegistry";
-import {
-  Approved as ApprovedV5,
   ApprovedUnscoped,
   MetaV1_2,
-  Migrated as MigratedV5,
-  Revoked as RevokedV5,
+  Migrated,
+  Revoked,
   RevokedUnscoped,
 } from "../generated/MigrationRegistryV5/MigrationRegistryV5";
 import { MigrationLine, MigrationRecord } from "../generated/schema";
@@ -69,24 +58,23 @@ export function migrationMetaSubject(
  * Record one `Migrated` as the next record in its line. The registry refuses
  * any write not applied onto the line's current head, so log order is line
  * order: the record's `appliedOnto` is the head before it and it becomes the
- * new head. A replay of a log already recorded returns null before touching
- * the line, so `index` and `recordCount` count each log once.
+ * new head. A replay of a log already recorded returns before touching the
+ * line, so `index` and `recordCount` count each log once.
  */
-function recordMigrated(
-  kind: string,
-  event: ethereum.Event,
-  sender: Bytes,
-  writer: Bytes,
-  namespace: Bytes,
-  migration: Bytes,
-  appliedAt: BigInt,
-  metaSubject: Bytes | null,
-): MigrationRecord | null {
+export function handleMigrationRegistryV5Migrated(event: Migrated): void {
   let rowId = logRowId(event);
   if (MigrationRecord.load(rowId) !== null) {
-    return null;
+    return;
   }
-  let registry = getOrCreateContract(event.address, kind, event.block.number);
+  let writer = event.params.writer;
+  let namespace = event.params.namespace;
+  let migration = event.params.migration;
+  let subject = migrationMetaSubject(writer, namespace, migration);
+  let registry = getOrCreateContract(
+    event.address,
+    ContractKind.MIGRATION_REGISTRY_V5,
+    event.block.number,
+  );
   let id = migrationLineId(registry.id, writer, namespace);
   let line = MigrationLine.load(id);
   let appliedOnto = migrationHeadGenesis();
@@ -106,80 +94,25 @@ function recordMigrated(
   row.index = index;
   row.migration = migration;
   row.appliedOnto = appliedOnto;
-  row.appliedAt = appliedAt;
-  row.sender = sender;
+  row.appliedAt = event.params.appliedAt;
+  row.sender = event.params.sender;
   row.blockNumber = event.block.number;
   row.blockTimestamp = event.block.timestamp;
   row.transactionHash = event.transaction.hash;
   row.transactionFrom = event.transaction.from;
   row.logIndex = event.logIndex;
-  row.metaSubject = metaSubject;
+  row.metaSubject = subject;
   row.save();
 
   line.head = migration;
   line.headRecord = rowId;
   line.recordCount = index + 1;
   line.save();
-  return row;
+
+  recordMetaSubjectRecord(event.address, subject, rowId);
 }
 
-export function handleMigrationRegistryMigrated(event: Migrated): void {
-  recordMigrated(
-    ContractKind.MIGRATION_REGISTRY,
-    event,
-    event.params.sender,
-    event.params.writer,
-    event.params.namespace,
-    event.params.migration,
-    event.params.appliedAt,
-    null,
-  );
-}
-
-export function handleMigrationRegistryV5Migrated(event: MigratedV5): void {
-  let subject = migrationMetaSubject(
-    event.params.writer,
-    event.params.namespace,
-    event.params.migration,
-  );
-  let row = recordMigrated(
-    ContractKind.MIGRATION_REGISTRY_V5,
-    event,
-    event.params.sender,
-    event.params.writer,
-    event.params.namespace,
-    event.params.migration,
-    event.params.appliedAt,
-    subject,
-  );
-  if (row !== null) {
-    recordMetaSubjectRecord(event.address, subject, row.id);
-  }
-}
-
-export function handleMigrationRegistryApproved(event: Approved): void {
-  recordDelegateChange(
-    ContractKind.MIGRATION_REGISTRY,
-    event,
-    event.params.sender,
-    event.params.scope,
-    event.params.delegate,
-    true,
-  );
-}
-
-export function handleMigrationRegistryRevoked(event: Revoked): void {
-  recordDelegateChange(
-    ContractKind.MIGRATION_REGISTRY,
-    event,
-    event.params.sender,
-    event.params.scope,
-    event.params.delegate,
-    false,
-  );
-}
-
-export function handleMigrationRegistryV5Approved(event: ApprovedV5): void {
+export function handleMigrationRegistryV5Approved(event: Approved): void {
   recordDelegateChange(
     ContractKind.MIGRATION_REGISTRY_V5,
     event,
@@ -190,7 +123,7 @@ export function handleMigrationRegistryV5Approved(event: ApprovedV5): void {
   );
 }
 
-export function handleMigrationRegistryV5Revoked(event: RevokedV5): void {
+export function handleMigrationRegistryV5Revoked(event: Revoked): void {
   recordDelegateChange(
     ContractKind.MIGRATION_REGISTRY_V5,
     event,

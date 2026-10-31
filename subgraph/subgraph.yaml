@@ -5,58 +5,6 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: ConfigRegistry
-    network: template
-    source:
-      abi: ConfigRegistry
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities:
-        - Contract
-        - ConfigBinding
-        - ConfigRegister
-        - RegistryDelegate
-        - RegistryDelegateChange
-      abis:
-        - name: ConfigRegistry
-          file: ./abis/ConfigRegistry.json
-      eventHandlers:
-        - event: Register(address,address,bytes32,bytes)
-          handler: handleConfigRegistryRegister
-        - event: Approved(address,bytes32,address)
-          handler: handleConfigRegistryApproved
-        - event: Revoked(address,bytes32,address)
-          handler: handleConfigRegistryRevoked
-      file: ./src/configregistry.ts
-  - kind: ethereum/contract
-    name: MigrationRegistry
-    network: template
-    source:
-      abi: MigrationRegistry
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities:
-        - Contract
-        - MigrationLine
-        - MigrationRecord
-        - RegistryDelegate
-        - RegistryDelegateChange
-      abis:
-        - name: MigrationRegistry
-          file: ./abis/MigrationRegistry.json
-      eventHandlers:
-        - event: Migrated(address,address,bytes32,bytes32,uint256)
-          handler: handleMigrationRegistryMigrated
-        - event: Approved(address,bytes32,address)
-          handler: handleMigrationRegistryApproved
-        - event: Revoked(address,bytes32,address)
-          handler: handleMigrationRegistryRevoked
-      file: ./src/migrationregistry.ts
-  - kind: ethereum/contract
     name: ConfigRegistryV5
     network: template
     source:
