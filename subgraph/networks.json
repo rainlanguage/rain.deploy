@@ -1,0 +1,92 @@
+{
+  "arbitrum-one": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 519115682
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 519119422
+    }
+  },
+  "base": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 53210195
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 53210703
+    }
+  },
+  "base-sepolia": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 51439343
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 51444423
+    }
+  },
+  "bsc": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 130324009
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 130326266
+    }
+  },
+  "flare": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 73190792
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 73191741
+    }
+  },
+  "mainnet": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 26292829
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 26292913
+    }
+  },
+  "hyperevm": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 49768958
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 49769995
+    }
+  },
+  "matic": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 96336285
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 96336965
+    }
+  },
+  "robinhood": {
+    "ConfigRegistryV5": {
+      "address": "0x82b7e6FDfD25EF64b013F98e8F2c1fC1D1872eC9",
+      "startBlock": 100259389
+    },
+    "MigrationRegistryV5": {
+      "address": "0xd708186f68D527B64c001398550627508205EE31",
+      "startBlock": 100268990
+    }
+  }
+}

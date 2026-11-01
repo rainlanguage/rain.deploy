@@ -1,0 +1,499 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+
+import { afterEach, assert, clearStore, describe, test } from "matchstick-as";
+import { Address, Bytes } from "@graphprotocol/graph-ts";
+import { RegistryMeta } from "../generated/schema";
+import {
+  Approved,
+  ApprovedUnscoped,
+  MetaV1_2,
+  Migrated as MigratedV5,
+  Revoked,
+  RevokedUnscoped,
+} from "../generated/MigrationRegistryV5/MigrationRegistryV5";
+import {
+  handleMigrationRegistryV5Approved,
+  handleMigrationRegistryV5ApprovedUnscoped,
+  handleMigrationRegistryV5MetaV1_2,
+  handleMigrationRegistryV5Migrated,
+  handleMigrationRegistryV5Revoked,
+  handleMigrationRegistryV5RevokedUnscoped,
+} from "../src/migrationregistry";
+import {
+  delegateChangeLog,
+  metaV1_2Log,
+  migratedLog,
+  mockRowId,
+  TX_FROM,
+  TX_HASH,
+  unscopedDelegateChangeLog,
+} from "./event-mocks.test";
+
+const REGISTRY = "0x1a4b89828eb2dd5f3a353bd98472512f371ce408";
+const WRITER = "0x1234567890123456789012345678901234567890";
+const SAFE = "0x00000000000000000000000000000000000000d1";
+/** `keccak256("acme.deploy")`, from `cast keccak`. */
+const NAMESPACE =
+  "0x170900825c559c8c2d7e17228df2416947907da566cb9ba49f2a2dbcb3adec94";
+/** `MIGRATION_HEAD_GENESIS`, from `cast keccak`. */
+const GENESIS =
+  "0xd85a7f14bb19a07649810ac09029cc9c29667e4059cb83e258bc52e213365d3f";
+const MIGRATION_1 =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+const MIGRATION_2 =
+  "0x0000000000000000000000000000000000000000000000000000000000000002";
+/** `keccak256(abi.encode(WRITER, NAMESPACE, MIGRATION_1))`, from `cast keccak $(cast abi-encode "f(address,bytes32,bytes32)" …)`. */
+const SUBJECT_1 =
+  "0x5aa3e9b4aa8bb0b7baaf271fea4f8bac3950901432d7410abd34e0dcd380a4fd";
+/** An empty rain meta document: just the `RainMetaDocumentV1` magic. */
+const META = "0xff0a89c674ee7874";
+/** `keccak256("acme.deploy.v4-registries")`, from `cast keccak`. */
+const MIGRATION_NAMED =
+  "0x74990da77a1ef7bb23bde9f14a61b397a0f7a6f45d7147d4a1f193e6596116dc";
+/** `keccak256(abi.encode(WRITER, NAMESPACE, MIGRATION_NAMED))`, from `cast keccak $(cast abi-encode "f(address,bytes32,bytes32)" …)`. */
+const SUBJECT_NAMED =
+  "0x2e1b9f73f5c55866f9d13b74499573a6530193cb253f6d7e5acb1835fcedd36f";
+/** From `RainMetaDocumentV1Item::cbor_encode_seq` (rain.metadata). */
+const P = "0xff0a89c674ee7874";
+const NAMESPACE_ITEM = "a2004b61636d652e6465706c6f79011bff82e354bb91c055";
+const MIGRATION_ITEM =
+  "a200581961636d652e6465706c6f792e76342d72656769737472696573011bffae12bf8892cc25";
+const OTHER_MIGRATION_ITEM =
+  "a2005161636d652e6465706c6f792e6f74686572011bffae12bf8892cc25";
+/** The namespace and migration preimages under the config registry magics. */
+const CONFIG_ITEMS =
+  "a2004b61636d652e6465706c6f79011bffcdcfae6227d5e9a200581961636d652e6465706c6f792e76342d72656769737472696573011bffcdb2cc1b1d53be";
+
+function lineId(registry: string): string {
+  return registry.concat(WRITER.slice(2)).concat(NAMESPACE.slice(2));
+}
+
+function migrate(migration: string, blockNumber: i32, logIndex: i32): void {
+  handleMigrationRegistryV5Migrated(
+    changetype<MigratedV5>(
+      migratedLog(
+        Address.fromString(REGISTRY),
+        Address.fromString(SAFE),
+        Address.fromString(WRITER),
+        Bytes.fromHexString(NAMESPACE),
+        Bytes.fromHexString(migration),
+        1000,
+        blockNumber,
+        logIndex,
+      ),
+    ),
+  );
+}
+
+function meta(
+  subject: string,
+  metaHex: string,
+  blockNumber: i32,
+  logIndex: i32,
+): void {
+  handleMigrationRegistryV5MetaV1_2(
+    changetype<MetaV1_2>(
+      metaV1_2Log(
+        Address.fromString(REGISTRY),
+        Address.fromString(SAFE),
+        Bytes.fromHexString(subject),
+        Bytes.fromHexString(metaHex),
+        blockNumber,
+        logIndex,
+      ),
+    ),
+  );
+}
+
+describe("MigrationRegistryV5 Migrated", () => {
+  afterEach(clearStore);
+
+  test("a first Migrated records onto genesis under the V5 registry, with its meta subject", () => {
+    migrate(MIGRATION_1, 100, 2);
+
+    let row = mockRowId(2);
+    assert.fieldEquals("MigrationRecord", row, "line", lineId(REGISTRY));
+    assert.fieldEquals("MigrationRecord", row, "index", "0");
+    assert.fieldEquals("MigrationRecord", row, "migration", MIGRATION_1);
+    assert.fieldEquals("MigrationRecord", row, "appliedOnto", GENESIS);
+    assert.fieldEquals("MigrationRecord", row, "appliedAt", "1000");
+    assert.fieldEquals("MigrationRecord", row, "sender", SAFE);
+    assert.fieldEquals("MigrationRecord", row, "metaSubject", SUBJECT_1);
+    assert.fieldEquals("MigrationRecord", row, "blockNumber", "100");
+    assert.fieldEquals("MigrationRecord", row, "blockTimestamp", "1200");
+    assert.fieldEquals(
+      "MigrationRecord",
+      row,
+      "transactionHash",
+      TX_HASH.toHexString(),
+    );
+    assert.fieldEquals(
+      "MigrationRecord",
+      row,
+      "transactionFrom",
+      TX_FROM.toHexString(),
+    );
+    assert.fieldEquals("MigrationRecord", row, "logIndex", "2");
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "registry", REGISTRY);
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "writer", WRITER);
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "head", MIGRATION_1);
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "headRecord", row);
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "recordCount", "1");
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
+  });
+
+  test("a second Migrated chains onto the first and a replay counts once", () => {
+    migrate(MIGRATION_1, 100, 2);
+    migrate(MIGRATION_2, 101, 0);
+    migrate(MIGRATION_2, 101, 0);
+
+    assert.fieldEquals("MigrationRecord", mockRowId(0), "index", "1");
+    assert.fieldEquals(
+      "MigrationRecord",
+      mockRowId(0),
+      "appliedOnto",
+      MIGRATION_1,
+    );
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "head", MIGRATION_2);
+    assert.fieldEquals(
+      "MigrationLine",
+      lineId(REGISTRY),
+      "headRecord",
+      mockRowId(0),
+    );
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "recordCount", "2");
+    assert.entityCount("MigrationRecord", 2);
+  });
+});
+
+describe("MigrationRegistryV5 MetaV1_2", () => {
+  afterEach(clearStore);
+
+  test("a write's meta links to its record, raw", () => {
+    migrate(MIGRATION_1, 100, 2);
+    meta(SUBJECT_1, META, 100, 3);
+
+    let row = mockRowId(3);
+    assert.entityCount("RegistryMeta", 1);
+    assert.fieldEquals("RegistryMeta", row, "registry", REGISTRY);
+    assert.fieldEquals("RegistryMeta", row, "sender", SAFE);
+    assert.fieldEquals("RegistryMeta", row, "subject", SUBJECT_1);
+    assert.fieldEquals("RegistryMeta", row, "meta", META);
+    assert.fieldEquals("RegistryMeta", row, "migrationRecord", mockRowId(2));
+    assert.fieldEquals("RegistryMeta", row, "verified", "false");
+    assert.fieldEquals("RegistryMeta", row, "blockNumber", "100");
+    assert.fieldEquals(
+      "RegistryMeta",
+      row,
+      "transactionHash",
+      TX_HASH.toHexString(),
+    );
+    assert.fieldEquals(
+      "RegistryMeta",
+      row,
+      "transactionFrom",
+      TX_FROM.toHexString(),
+    );
+    assert.fieldEquals("RegistryMeta", row, "logIndex", "3");
+    let entity = RegistryMeta.load(Bytes.fromHexString(row))!;
+    assert.assertTrue(entity.configBinding === null);
+    assert.assertTrue(entity.configRegister === null);
+  });
+
+  test("a meta whose subject no record has is kept, unlinked", () => {
+    migrate(MIGRATION_1, 100, 2);
+    meta(MIGRATION_2, META, 100, 3);
+
+    let entity = RegistryMeta.load(Bytes.fromHexString(mockRowId(3)))!;
+    assert.assertTrue(entity.migrationRecord === null);
+    assert.fieldEquals("RegistryMeta", mockRowId(3), "meta", META);
+  });
+
+  test("a meta seen before any record names its registry a V5 migration registry", () => {
+    meta(SUBJECT_1, META, 100, 3);
+
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
+  });
+
+  test("a replayed meta writes one row", () => {
+    migrate(MIGRATION_1, 100, 2);
+    meta(SUBJECT_1, META, 100, 3);
+    meta(SUBJECT_1, META, 100, 3);
+
+    assert.entityCount("RegistryMeta", 1);
+  });
+});
+
+describe("MigrationRegistryV5 delegates", () => {
+  afterEach(clearStore);
+
+  test("Approved then Revoked move an approval under the V5 registry", () => {
+    handleMigrationRegistryV5Approved(
+      changetype<Approved>(
+        delegateChangeLog(
+          Address.fromString(REGISTRY),
+          Address.fromString(WRITER),
+          Bytes.fromHexString(NAMESPACE),
+          Address.fromString(SAFE),
+          300,
+          4,
+        ),
+      ),
+    );
+    let id = REGISTRY.concat(WRITER.slice(2))
+      .concat(NAMESPACE.slice(2))
+      .concat(SAFE.slice(2));
+    assert.fieldEquals("RegistryDelegate", id, "approved", "true");
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
+
+    handleMigrationRegistryV5Revoked(
+      changetype<Revoked>(
+        delegateChangeLog(
+          Address.fromString(REGISTRY),
+          Address.fromString(WRITER),
+          Bytes.fromHexString(NAMESPACE),
+          Address.fromString(SAFE),
+          400,
+          2,
+        ),
+      ),
+    );
+    assert.fieldEquals("RegistryDelegate", id, "approved", "false");
+    assert.fieldEquals("RegistryDelegate", id, "revokedAtBlock", "400");
+    assert.entityCount("RegistryDelegateChange", 2);
+  });
+
+  test("a Revoked seen first names its registry a V5 migration registry", () => {
+    handleMigrationRegistryV5Revoked(
+      changetype<Revoked>(
+        delegateChangeLog(
+          Address.fromString(REGISTRY),
+          Address.fromString(WRITER),
+          Bytes.fromHexString(NAMESPACE),
+          Address.fromString(SAFE),
+          400,
+          2,
+        ),
+      ),
+    );
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
+  });
+});
+
+function approveUnscoped(blockNumber: i32, logIndex: i32): void {
+  handleMigrationRegistryV5ApprovedUnscoped(
+    changetype<ApprovedUnscoped>(
+      unscopedDelegateChangeLog(
+        Address.fromString(REGISTRY),
+        Address.fromString(WRITER),
+        Address.fromString(SAFE),
+        blockNumber,
+        logIndex,
+      ),
+    ),
+  );
+}
+
+function revokeUnscoped(blockNumber: i32, logIndex: i32): void {
+  handleMigrationRegistryV5RevokedUnscoped(
+    changetype<RevokedUnscoped>(
+      unscopedDelegateChangeLog(
+        Address.fromString(REGISTRY),
+        Address.fromString(WRITER),
+        Address.fromString(SAFE),
+        blockNumber,
+        logIndex,
+      ),
+    ),
+  );
+}
+
+const UNSCOPED_ID = REGISTRY.concat(WRITER.slice(2)).concat(SAFE.slice(2));
+
+describe("MigrationRegistryV5 unscoped delegates", () => {
+  afterEach(clearStore);
+
+  test("ApprovedUnscoped then RevokedUnscoped move an unscoped approval", () => {
+    approveUnscoped(300, 4);
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "approved",
+      "true",
+    );
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "account",
+      WRITER,
+    );
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "delegate",
+      SAFE,
+    );
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "approvedAtBlock",
+      "300",
+    );
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
+
+    revokeUnscoped(400, 2);
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "approved",
+      "false",
+    );
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "revokedAtBlock",
+      "400",
+    );
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "approvedAtBlock",
+      "300",
+    );
+    assert.entityCount("RegistryUnscopedDelegateChange", 2);
+    assert.fieldEquals(
+      "RegistryUnscopedDelegateChange",
+      mockRowId(2),
+      "approved",
+      "false",
+    );
+    assert.fieldEquals(
+      "RegistryUnscopedDelegateChange",
+      mockRowId(2),
+      "registryUnscopedDelegate",
+      UNSCOPED_ID,
+    );
+    assert.entityCount("RegistryDelegate", 0);
+  });
+
+  test("a replayed ApprovedUnscoped after a RevokedUnscoped leaves the revoke standing", () => {
+    approveUnscoped(300, 4);
+    revokeUnscoped(400, 2);
+    approveUnscoped(300, 4);
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "approved",
+      "false",
+    );
+    assert.entityCount("RegistryUnscopedDelegateChange", 2);
+  });
+
+  test("RevokedUnscoped leaves a scoped approval of the same delegate standing", () => {
+    handleMigrationRegistryV5Approved(
+      changetype<Approved>(
+        delegateChangeLog(
+          Address.fromString(REGISTRY),
+          Address.fromString(WRITER),
+          Bytes.fromHexString(NAMESPACE),
+          Address.fromString(SAFE),
+          300,
+          1,
+        ),
+      ),
+    );
+    approveUnscoped(300, 2);
+    revokeUnscoped(400, 3);
+    let scoped = REGISTRY.concat(WRITER.slice(2))
+      .concat(NAMESPACE.slice(2))
+      .concat(SAFE.slice(2));
+    assert.fieldEquals("RegistryDelegate", scoped, "approved", "true");
+    assert.fieldEquals(
+      "RegistryUnscopedDelegate",
+      UNSCOPED_ID,
+      "approved",
+      "false",
+    );
+    assert.entityCount("RegistryDelegateChange", 1);
+    assert.entityCount("RegistryUnscopedDelegateChange", 2);
+  });
+
+  test("a RevokedUnscoped seen first names its registry a V5 migration registry", () => {
+    revokeUnscoped(400, 2);
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
+  });
+});
+
+const VERIFIED = "true|acme.deploy|acme.deploy.v4-registries";
+const UNVERIFIED = "false|null|null";
+function verifiedFor(metaHex: string): string {
+  migrate(MIGRATION_NAMED, 100, 2);
+  meta(SUBJECT_NAMED, metaHex, 100, 3);
+  let row = RegistryMeta.load(Bytes.fromHexString(mockRowId(3)))!;
+  let namespace = row.namespaceString;
+  let migration = row.migrationString;
+  return (row.verified ? "true|" : "false|")
+    .concat(namespace === null ? "null" : namespace!)
+    .concat("|")
+    .concat(migration === null ? "null" : migration!);
+}
+
+describe("MigrationRegistryV5 MetaV1_2 verification", () => {
+  afterEach(clearStore);
+
+  test("namespace and migration preimages that hash to the record verify", () => {
+    assert.stringEquals(
+      verifiedFor(P.concat(NAMESPACE_ITEM).concat(MIGRATION_ITEM)),
+      VERIFIED,
+    );
+  });
+
+  test("a migration preimage that hashes elsewhere does not verify", () => {
+    assert.stringEquals(
+      verifiedFor(P.concat(NAMESPACE_ITEM).concat(OTHER_MIGRATION_ITEM)),
+      UNVERIFIED,
+    );
+  });
+
+  test("a missing namespace or migration item does not verify", () => {
+    assert.stringEquals(verifiedFor(P.concat(MIGRATION_ITEM)), UNVERIFIED);
+    clearStore();
+    assert.stringEquals(verifiedFor(P.concat(NAMESPACE_ITEM)), UNVERIFIED);
+  });
+
+  test("a meta for a record its line has moved past verifies against that record", () => {
+    migrate(MIGRATION_NAMED, 100, 2);
+    migrate(MIGRATION_2, 101, 4);
+    meta(
+      SUBJECT_NAMED,
+      P.concat(NAMESPACE_ITEM).concat(MIGRATION_ITEM),
+      101,
+      5,
+    );
+
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "head", MIGRATION_2);
+    assert.fieldEquals("RegistryMeta", mockRowId(5), "verified", "true");
+  });
+
+  test("config registry items do not verify a migration", () => {
+    assert.stringEquals(verifiedFor(P.concat(CONFIG_ITEMS)), UNVERIFIED);
+  });
+
+  test("malformed meta does not verify", () => {
+    let ok = P.concat(NAMESPACE_ITEM).concat(MIGRATION_ITEM);
+    assert.stringEquals(verifiedFor(ok.slice(0, ok.length - 2)), UNVERIFIED);
+    clearStore();
+    assert.stringEquals(verifiedFor(META), UNVERIFIED);
+  });
+
+  test("meta whose subject names no record does not verify", () => {
+    meta(
+      SUBJECT_NAMED,
+      P.concat(NAMESPACE_ITEM).concat(MIGRATION_ITEM),
+      100,
+      3,
+    );
+    assert.fieldEquals("RegistryMeta", mockRowId(3), "verified", "false");
+  });
+});

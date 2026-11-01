@@ -1,0 +1,6 @@
+name: Subgraph unit tests
+on: [push]
+jobs:
+  subgraph-test:
+    uses: rainlanguage/rainix/.github/workflows/rainix-subgraph-test.yaml@main
+    secrets: inherit
