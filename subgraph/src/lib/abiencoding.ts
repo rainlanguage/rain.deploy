@@ -131,11 +131,11 @@ class EncodingWalk {
     for (let i: i64 = 0; i < count; i++) {
       let item = isTuple ? t.components[i as i32] : t.element!;
       if (item.dynamic) {
-        let target = saturatingAdd(base, this.size(head));
-        if (target != tail) {
+        // Never jump to an offset from the data, so each word is read at most once.
+        if (this.size(head) != tail - base) {
           this.canonical = false;
         }
-        let end = this.value(item, target);
+        let end = this.value(item, tail);
         if (end < 0) {
           return -1;
         }
@@ -149,7 +149,11 @@ class EncodingWalk {
   }
 }
 
-/** Whether `data` is exactly `abi.encode` of one value of type `t`. */
+/**
+ * Reads `data` as `abi.encode` of one value of type `t` in canonical layout.
+ * NOT_DECODABLE: the type is outside the grammar/cap, or reading the value in its canonical layout runs past the end of the data (including a length that cannot fit, and string/bytes without their tail padding).
+ * NOT_CANONICAL: it reads to the end in canonical layout but is not byte-identical to the canonical abi.encode: dirty padding/sign/bool, an offset word not equal to its canonical value, or bytes after the encoding.
+ */
 export function abiEncodingStatus(t: AbiType, data: Bytes): i32 {
   let walk = new EncodingWalk(data);
   let root = new AbiType(AbiKind.TUPLE, 0, 0, null, [t]);
