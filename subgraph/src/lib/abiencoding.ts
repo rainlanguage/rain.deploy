@@ -21,7 +21,8 @@ class EncodingWalk {
   }
 
   fits(pos: i64, size: i64): bool {
-    return pos >= 0 && size >= 0 && saturatingAdd(pos, size) <= (this.data.length as i64);
+    let end = saturatingAdd(pos, size);
+    return pos >= 0 && size >= 0 && end <= (this.data.length as i64);
   }
 
   /** Zero-padding check over `[from, to)` of the word at `pos`. */
@@ -117,7 +118,10 @@ class EncodingWalk {
       }
     } else {
       let headSize = t.element!.headSize;
-      headsEnd = count > SIZE_CAP / headSize ? SIZE_CAP : saturatingAdd(base, count * headSize);
+      headsEnd =
+        count > SIZE_CAP / headSize
+          ? SIZE_CAP
+          : saturatingAdd(base, count * headSize);
     }
     if (!this.fits(base, headsEnd - base)) {
       return -1;

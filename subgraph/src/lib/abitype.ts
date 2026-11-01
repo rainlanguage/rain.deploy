@@ -118,6 +118,10 @@ function elementary(kind: i32, width: i32): AbiType {
   return new AbiType(kind, width, 0, null, new Array<AbiType>());
 }
 
+function arrayOf(element: AbiType, length: i64): AbiType {
+  return new AbiType(AbiKind.ARRAY, 0, length, element, new Array<AbiType>());
+}
+
 function elementaryAbiType(name: string): AbiType | null {
   if (name == "address") {
     return elementary(AbiKind.ADDRESS, 20);
@@ -185,7 +189,7 @@ export function parseAbiType(s: string): AbiType | null {
         levels++;
         if (pos < s.length && s.charCodeAt(pos) == CHAR_CLOSE_BRACKET) {
           pos++;
-          current = new AbiType(AbiKind.ARRAY, 0, -1, current, new Array<AbiType>());
+          current = arrayOf(current, -1);
           continue;
         }
         if (
@@ -207,7 +211,7 @@ export function parseAbiType(s: string): AbiType | null {
           return null;
         }
         pos++;
-        current = new AbiType(AbiKind.ARRAY, 0, length, current, new Array<AbiType>());
+        current = arrayOf(current, length);
       } else if (c == CHAR_CLOSE_PAREN && enclosing.length > 0) {
         let sibling = enclosing.pop();
         levels = 1 + (sibling > levels ? sibling : levels);
