@@ -516,6 +516,7 @@ describe("ConfigRegistryV5 Register", () => {
     assert.fieldEquals("ConfigRegister", row, "valueType", "address");
     assert.fieldEquals("ConfigRegister", row, "valueTypeHash", ADDRESS_HASH);
     assert.fieldEquals("ConfigRegister", row, "blockNumber", "100");
+    assert.fieldEquals("ConfigRegister", row, "blockTimestamp", "1200");
     assert.fieldEquals(
       "ConfigRegister",
       row,
@@ -2778,6 +2779,22 @@ describe("ConfigRegistryV5 MetaV1_2 rainmeta corpus", () => {
   });
 });
 
+function scoped(approved: boolean, blockNumber: i32, logIndex: i32): void {
+  let log = delegateChangeLog(
+    Address.fromString(REGISTRY),
+    Address.fromString(AUTHORITY),
+    Bytes.fromHexString(US_NAME),
+    Address.fromString(DELEGATE),
+    blockNumber,
+    logIndex,
+  );
+  if (approved) {
+    handleConfigRegistryV5Approved(changetype<Approved>(log));
+  } else {
+    handleConfigRegistryV5Revoked(changetype<Revoked>(log));
+  }
+}
+
 describe("ConfigRegistryV5 delegates", () => {
   afterEach(clearStore);
 
@@ -2797,6 +2814,9 @@ describe("ConfigRegistryV5 delegates", () => {
     let id = delegateId(REGISTRY, AUTHORITY, US_NAME, DELEGATE);
     assert.fieldEquals("RegistryDelegate", id, "approved", "true");
     assert.fieldEquals("RegistryDelegate", id, "registry", REGISTRY);
+    assert.fieldEquals("RegistryDelegate", id, "account", AUTHORITY);
+    assert.fieldEquals("RegistryDelegate", id, "scope", US_NAME);
+    assert.fieldEquals("RegistryDelegate", id, "delegate", DELEGATE);
     assert.fieldEquals("Contract", REGISTRY, "kind", "CONFIG_REGISTRY_V5");
 
     handleConfigRegistryV5Revoked(
@@ -2813,8 +2833,63 @@ describe("ConfigRegistryV5 delegates", () => {
     );
     assert.fieldEquals("RegistryDelegate", id, "approved", "false");
     assert.fieldEquals("RegistryDelegate", id, "approvedAtBlock", "300");
+    assert.fieldEquals("RegistryDelegate", id, "approvedAtTimestamp", "3600");
+    assert.fieldEquals("RegistryDelegate", id, "revokedAtBlock", "400");
+    assert.fieldEquals("RegistryDelegate", id, "revokedAtTimestamp", "4800");
+    assert.entityCount("RegistryDelegateChange", 2);
+  });
+
+  test("a scoped change row records its approval and its log's block and transaction", () => {
+    scoped(true, 300, 4);
+    scoped(false, 400, 2);
+
+    let id = delegateId(REGISTRY, AUTHORITY, US_NAME, DELEGATE);
+    let row = mockRowId(4);
+    assert.fieldEquals("RegistryDelegateChange", row, "registryDelegate", id);
+    assert.fieldEquals("RegistryDelegateChange", row, "approved", "true");
+    assert.fieldEquals("RegistryDelegateChange", row, "blockNumber", "300");
+    assert.fieldEquals("RegistryDelegateChange", row, "blockTimestamp", "3600");
+    assert.fieldEquals(
+      "RegistryDelegateChange",
+      row,
+      "transactionHash",
+      TX_HASH.toHexString(),
+    );
+    assert.fieldEquals(
+      "RegistryDelegateChange",
+      row,
+      "transactionFrom",
+      TX_FROM.toHexString(),
+    );
+    assert.fieldEquals("RegistryDelegateChange", row, "logIndex", "4");
+    assert.fieldEquals(
+      "RegistryDelegateChange",
+      mockRowId(2),
+      "approved",
+      "false",
+    );
+  });
+
+  test("a replayed Approved after a Revoked leaves the revoke standing", () => {
+    scoped(true, 300, 4);
+    scoped(false, 400, 2);
+    scoped(true, 300, 4);
+
+    let id = delegateId(REGISTRY, AUTHORITY, US_NAME, DELEGATE);
+    assert.fieldEquals("RegistryDelegate", id, "approved", "false");
     assert.fieldEquals("RegistryDelegate", id, "revokedAtBlock", "400");
     assert.entityCount("RegistryDelegateChange", 2);
+  });
+
+  test("a Revoked seen first names its registry a V5 config registry", () => {
+    scoped(false, 400, 2);
+    assert.fieldEquals("Contract", REGISTRY, "kind", "CONFIG_REGISTRY_V5");
+  });
+
+  test("a registry's Contract keeps the block it was first seen at", () => {
+    scoped(true, 300, 4);
+    scoped(false, 400, 2);
+    assert.fieldEquals("Contract", REGISTRY, "firstIndexedBlock", "300");
   });
 });
 
@@ -2912,5 +2987,10 @@ describe("ConfigRegistryV5 unscoped delegates", () => {
       "revokedAtTimestamp",
       "4800",
     );
+  });
+
+  test("a RevokedUnscoped seen first names its registry a V5 config registry", () => {
+    unscoped(false, 400, 2);
+    assert.fieldEquals("Contract", REGISTRY, "kind", "CONFIG_REGISTRY_V5");
   });
 });
