@@ -12,6 +12,7 @@ import {
   RevokedUnscoped,
 } from "../generated/ConfigRegistryV5/ConfigRegistryV5";
 import { ConfigBinding, ConfigRegister } from "../generated/schema";
+import { isCanonicalAbiType } from "./lib/abitype";
 import { ContractKind, getOrCreateContract } from "./lib/contract";
 import { logRowId } from "./lib/event";
 import {
@@ -38,6 +39,10 @@ export function configValueStatus(
 ): string {
   if (valueType === null) {
     return ConfigValueStatus.TYPE_HASH_MISMATCH;
+  }
+  // ethabi-based graph-node reads an unknown type name as uint8, so the grammar is checked here.
+  if (!isCanonicalAbiType(valueType!)) {
+    return ConfigValueStatus.VALUE_NOT_DECODABLE;
   }
   let decoded = ethereum.decode(valueType!, value);
   if (decoded === null) {
