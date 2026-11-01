@@ -230,6 +230,19 @@ export class ConfigBinding extends Entity {
     this.set("valueTypeHash", Value.fromBytes(value));
   }
 
+  get status(): string {
+    let value = this.get("status");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set status(value: string) {
+    this.set("status", Value.fromString(value));
+  }
+
   get boundAtTimestamp(): BigInt {
     let value = this.get("boundAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
@@ -396,6 +409,19 @@ export class ConfigRegister extends Entity {
 
   set valueTypeHash(value: Bytes) {
     this.set("valueTypeHash", Value.fromBytes(value));
+  }
+
+  get status(): string {
+    let value = this.get("status");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set status(value: string) {
+    this.set("status", Value.fromString(value));
   }
 
   get metas(): RegistryMetaLoader {
