@@ -120,7 +120,25 @@ describe("MigrationRegistryV5 Migrated", () => {
     assert.fieldEquals("MigrationRecord", row, "appliedAt", "1000");
     assert.fieldEquals("MigrationRecord", row, "sender", SAFE);
     assert.fieldEquals("MigrationRecord", row, "metaSubject", SUBJECT_1);
+    assert.fieldEquals("MigrationRecord", row, "blockNumber", "100");
+    assert.fieldEquals("MigrationRecord", row, "blockTimestamp", "1200");
+    assert.fieldEquals(
+      "MigrationRecord",
+      row,
+      "transactionHash",
+      TX_HASH.toHexString(),
+    );
+    assert.fieldEquals(
+      "MigrationRecord",
+      row,
+      "transactionFrom",
+      TX_FROM.toHexString(),
+    );
+    assert.fieldEquals("MigrationRecord", row, "logIndex", "2");
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "registry", REGISTRY);
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "writer", WRITER);
     assert.fieldEquals("MigrationLine", lineId(REGISTRY), "head", MIGRATION_1);
+    assert.fieldEquals("MigrationLine", lineId(REGISTRY), "headRecord", row);
     assert.fieldEquals("MigrationLine", lineId(REGISTRY), "recordCount", "1");
     assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
   });
@@ -138,6 +156,12 @@ describe("MigrationRegistryV5 Migrated", () => {
       MIGRATION_1,
     );
     assert.fieldEquals("MigrationLine", lineId(REGISTRY), "head", MIGRATION_2);
+    assert.fieldEquals(
+      "MigrationLine",
+      lineId(REGISTRY),
+      "headRecord",
+      mockRowId(0),
+    );
     assert.fieldEquals("MigrationLine", lineId(REGISTRY), "recordCount", "2");
     assert.entityCount("MigrationRecord", 2);
   });
@@ -238,6 +262,22 @@ describe("MigrationRegistryV5 delegates", () => {
     assert.fieldEquals("RegistryDelegate", id, "approved", "false");
     assert.fieldEquals("RegistryDelegate", id, "revokedAtBlock", "400");
     assert.entityCount("RegistryDelegateChange", 2);
+  });
+
+  test("a Revoked seen first names its registry a V5 migration registry", () => {
+    handleMigrationRegistryV5Revoked(
+      changetype<Revoked>(
+        delegateChangeLog(
+          Address.fromString(REGISTRY),
+          Address.fromString(WRITER),
+          Bytes.fromHexString(NAMESPACE),
+          Address.fromString(SAFE),
+          400,
+          2,
+        ),
+      ),
+    );
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
   });
 });
 
@@ -377,6 +417,11 @@ describe("MigrationRegistryV5 unscoped delegates", () => {
     );
     assert.entityCount("RegistryDelegateChange", 1);
     assert.entityCount("RegistryUnscopedDelegateChange", 2);
+  });
+
+  test("a RevokedUnscoped seen first names its registry a V5 migration registry", () => {
+    revokeUnscoped(400, 2);
+    assert.fieldEquals("Contract", REGISTRY, "kind", "MIGRATION_REGISTRY_V5");
   });
 });
 
