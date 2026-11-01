@@ -12,6 +12,9 @@ const CHAR_COMMA: i32 = 44;
 const CHAR_OPEN_BRACKET: i32 = 91;
 const CHAR_CLOSE_BRACKET: i32 = 93;
 
+/** ethereum.decode recurses host-side once per enclosing tuple and array dimension on the path to an element. */
+const MAX_NESTING: i32 = 32;
+
 function isDigit(c: i32): bool {
   return c >= CHAR_0 && c <= CHAR_9;
 }
@@ -63,10 +66,14 @@ function isElementaryAbiType(name: string): bool {
 /** Iterative so that deeply nested tuples in an emitted type string cannot overflow the wasm stack. */
 export function isCanonicalAbiType(s: string): bool {
   let pos = 0;
-  let depth = 0;
+  let enclosing = new Array<i32>();
+  let levels: i32 = 0;
   while (true) {
     while (pos < s.length && s.charCodeAt(pos) == CHAR_OPEN_PAREN) {
-      depth++;
+      if (enclosing.length >= MAX_NESTING) {
+        return false;
+      }
+      enclosing.push(0);
       pos++;
     }
     let start = pos;
@@ -76,10 +83,15 @@ export function isCanonicalAbiType(s: string): bool {
     if (!isElementaryAbiType(s.substring(start, pos))) {
       return false;
     }
+    levels = 0;
     while (pos < s.length) {
       let c = s.charCodeAt(pos);
       if (c == CHAR_OPEN_BRACKET) {
         pos++;
+        if (levels >= MAX_NESTING) {
+          return false;
+        }
+        levels++;
         if (pos < s.length && s.charCodeAt(pos) == CHAR_CLOSE_BRACKET) {
           pos++;
           continue;
@@ -98,18 +110,26 @@ export function isCanonicalAbiType(s: string): bool {
           return false;
         }
         pos++;
-      } else if (c == CHAR_CLOSE_PAREN && depth > 0) {
-        depth--;
+      } else if (c == CHAR_CLOSE_PAREN && enclosing.length > 0) {
+        let sibling = enclosing.pop();
+        levels = 1 + (sibling > levels ? sibling : levels);
+        if (levels > MAX_NESTING) {
+          return false;
+        }
         pos++;
       } else {
         break;
       }
     }
     if (pos == s.length) {
-      return depth == 0;
+      return enclosing.length == 0;
     }
-    if (s.charCodeAt(pos) != CHAR_COMMA || depth == 0) {
+    if (s.charCodeAt(pos) != CHAR_COMMA || enclosing.length == 0) {
       return false;
+    }
+    let top = enclosing.length - 1;
+    if (levels > enclosing[top]) {
+      enclosing[top] = levels;
     }
     pos++;
   }
