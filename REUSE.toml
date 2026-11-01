@@ -17,6 +17,7 @@ path = [
   "REUSE.toml",
   "soldeer.lock",
   "subgraph/abis/**",
+  "subgraph/generated/**",
   "subgraph/networks.json",
   "subgraph/package-lock.json",
   "subgraph/package.json",
