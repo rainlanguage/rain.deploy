@@ -199,6 +199,40 @@ const STRING_TUPLE_VALUE =
 /** `cast abi-encode "f(string,uint256)" st0x.rbac.us.v1 1000000`: the tuple's fields as flat params; `cast abi-decode --input "f((string,uint256))"` rejects it. */
 const STRING_TUPLE_FLAT_VALUE =
   "0x000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000f737430782e726261632e75732e76310000000000000000000000000000000000";
+/** `cast abi-encode "f(uint8)" 1`. */
+const UINT8_VALUE =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+/** `cast abi-encode "f(bytes1)" 0x01`. */
+const BYTES1_VALUE =
+  "0x0100000000000000000000000000000000000000000000000000000000000000";
+/** `cast abi-encode "f(bytes32)" 0x00…00`. */
+const ZERO_WORD_VALUE =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
+/** 33 bytes left-aligned over two words: `cast abi-encode "f(bytes32,bytes1)" 0x11…11 0x22`. */
+const BYTES33_VALUE =
+  "0x11111111111111111111111111111111111111111111111111111111111111112200000000000000000000000000000000000000000000000000000000000000";
+/** A zero-length static array and an empty tuple encode to no bytes; `cast abi-encode` rejects both types. */
+const EMPTY_VALUE = "0x";
+/** `cast abi-encode "f((address,uint256)[])" "[($AUTHORITY,1000000)]"`. */
+const TUPLE_ARRAY_VALUE =
+  "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000b300013cd54a8f1ac40981f80faaa18b8cc1e4c00000000000000000000000000000000000000000000000000000000000f4240";
+/** `cast abi-encode "f(((address,uint256[])[2],bool))" "([($AUTHORITY,[1000000]),($DELEGATE,[1,2])],true)"`. */
+const NESTED_TUPLE_VALUE =
+  "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000b300013cd54a8f1ac40981f80faaa18b8cc1e4c0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000000d10000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002";
+/** `cast abi-encode` of either around $AUTHORITY is `ADDRESS_VALUE`. */
+const TUPLES_32 = "(".repeat(32) + "address" + ")".repeat(32);
+const TUPLES_33 = "(".repeat(33) + "address" + ")".repeat(33);
+const ARRAY_DIMS_32 = "uint256" + "[]".repeat(32);
+const ARRAY_DIMS_33 = "uint256" + "[]".repeat(33);
+/** `cast abi-encode "f(<ARRAY_DIMS_32>)" "[]"`, the same bytes for `ARRAY_DIMS_33`. */
+const EMPTY_ARRAY_VALUE =
+  "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000";
+/** 16 levels of `(T,bool)[]` around uint256 nest 32 deep; the enclosing `(bool,…)` is the 33rd. */
+const MIXED_33 =
+  "(bool," + "(".repeat(16) + "uint256" + ",bool)[]".repeat(16) + ")";
+/** `cast abi-encode "f(<MIXED_33>)" "(true,[])"`. */
+const MIXED_33_VALUE =
+  "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000";
 
 function bindingId(registry: string, authority: string, name: string): string {
   return registry.concat(authority.slice(2)).concat(name.slice(2));
@@ -671,6 +705,209 @@ describe("ConfigRegistryV5 Register value status", () => {
       "VALUE_NOT_CANONICAL",
     );
     assert.fieldEquals("ConfigRegister", rowIdIn(THIRD_TX, 2), "status", "VALID");
+  });
+});
+
+// Type hashes are `cast keccak` of the registered type string.
+describe("ConfigRegistryV5 Register value type grammar", () => {
+  afterEach(clearStore);
+
+  test("the uint alias is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint",
+      "0x78b9198c2298bca6916a2669592af279cda8160226cf57bc4580c40c0a8b1713",
+      UINT256_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("the int alias is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "int",
+      "0x92369a0158dcb3f6fc2aca50da098a31dad8f35ad392c261b13e991a688eeeb0",
+      UINT256_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("the byte alias is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "byte",
+      "0xadd4bfc7bb557d02d6c639d2a54f9300196b2fdb6b83d6d613d4cfd52221306f",
+      BYTES1_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a uint width that is not a multiple of 8 is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint7",
+      "0x97c9498906a7283d2902a53890b7c3f855b95ea6a1e1f60511ece6519ec1d8a1",
+      UINT8_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a uint wider than 256 bits is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint264",
+      "0xe877b9b0a6bb356cf9c711df45bad6885e291b54381e77cf19dc24e4a0d6a0d6",
+      UINT256_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a uint width with a leading zero is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint08",
+      "0x9b2df921949fa51ec4de12babe80bbc6de5b9ec22fe2346f02ff7ca2bd8a49f5",
+      UINT8_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("bytes0 is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "bytes0",
+      "0xc20c3d209d88f6b9660db1f31ecaf3ebca337138ba7278017a28c224c22716a4",
+      ZERO_WORD_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("bytes33 is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "bytes33",
+      "0x092d050319b0eb51fbda80d2efacf47c7529eb676bded7f31fc4808cf462fcba",
+      BYTES33_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a type with whitespace is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "(address, uint256)",
+      "0x6e6055e76cf9b9a9b440706a86eb85e9a130ec35a050355a075c7a6d53a8ec93",
+      STATIC_TUPLE_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("an uppercase type is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "Address",
+      "0xef949621d9619a7bdc7308bca3bf3f6508504e4bac5dab9b94b151c88dbea455",
+      ADDRESS_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a zero-length array is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint256[0]",
+      "0x85c9cdc946b5ecbed6ce89dedf7c9a623bd81862510c37d0050323ee48fcb8af",
+      EMPTY_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("an array length with a leading zero is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint256[01]",
+      "0xb816cd9ba0cfd308ccea40bf3301efa33ecf9e6ff7539b78988dd37e80107044",
+      UINT256_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("the empty tuple is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "()",
+      "0x861731d50c3880a2ca1994d5ec287b94b2f4bd832a67d3e41c08177bdd5674fe",
+      EMPTY_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a tuple with a trailing comma is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "(address,)",
+      "0xf61e20cdd072457a549ad61e6c899609e8fe11bd4747897942e0b1d2c989287b",
+      ADDRESS_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("two adjacent top-level tuples are VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "(address)(uint256)",
+      "0xe5e7692eb93aad279b40890e9e60ae02ef32ac86234c1248b529dc59d1dd00fd",
+      STATIC_TUPLE_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("an array of tuples is VALID", () => {
+    assertRegisteredStatus(
+      "(address,uint256)[]",
+      "0x5b81acc6dc6876f5033862e9d9c367057f2b69d1c8536634f2ab456c332396c6",
+      TUPLE_ARRAY_VALUE,
+      "VALID",
+    );
+  });
+
+  test("a tuple of a fixed array of tuples holding an array is VALID", () => {
+    assertRegisteredStatus(
+      "((address,uint256[])[2],bool)",
+      "0xfb89b8139d874aaeae472c926353ac2d7eb38d54d2eb405b0fc34f29ac122970",
+      NESTED_TUPLE_VALUE,
+      "VALID",
+    );
+  });
+
+  test("32 nested tuples are VALID", () => {
+    assertRegisteredStatus(
+      TUPLES_32,
+      "0xc3bd1bb55f752a591dba3236a77c1c14328d9d05338f49c993c425a8e314c178",
+      ADDRESS_VALUE,
+      "VALID",
+    );
+  });
+
+  test("33 nested tuples are VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      TUPLES_33,
+      "0x14926ba02c9ae4738f8001058ebaebf681a1ca6934ba3d50d51c8be90b5fb16d",
+      ADDRESS_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a uint256 with 32 array dimensions is VALID", () => {
+    assertRegisteredStatus(
+      ARRAY_DIMS_32,
+      "0x7a49a74c321d4917f7aa0b7b003502add35295e19329cdcab409e0851aa8a368",
+      EMPTY_ARRAY_VALUE,
+      "VALID",
+    );
+  });
+
+  test("a uint256 with 33 array dimensions is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      ARRAY_DIMS_33,
+      "0xb7eaeda0ee15596f97551c5f8f012a26cef1847490177c80cb6fe652a6c8d5ee",
+      EMPTY_ARRAY_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("tuples and arrays nested 33 levels deep are VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      MIXED_33,
+      "0xbb177bbe0226cfd12395ad09b1b1c474a74e6355530540cc27f76e8a99463dbc",
+      MIXED_33_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
   });
 });
 
