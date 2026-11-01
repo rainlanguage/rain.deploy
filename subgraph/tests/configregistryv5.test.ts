@@ -164,6 +164,41 @@ const META_RAW_DECLARED_DEFLATE = P.concat(
 ).concat(TYPE_ADDRESS);
 const OTHER_TX =
   "0xdeadbeef00000000000000000000000000000000000000000000000000000002";
+const THIRD_TX =
+  "0xdeadbeef00000000000000000000000000000000000000000000000000000003";
+/** `keccak256("address[]")`, from `cast keccak`. */
+const ADDRESS_ARRAY_HASH =
+  "0x23d8ff3dc5aed4a634bcf123581c95e70c60ac0e5246916790aef6d4451ff4c1";
+/** `keccak256("(string,uint256)")`, from `cast keccak`. */
+const STRING_TUPLE_HASH =
+  "0x45c897968990a1ed353589d5732217c4e75bf89a6ea6f696d54704bee551a7f5";
+/** `keccak256("foo")`, from `cast keccak`. */
+const FOO_HASH =
+  "0x41b1a0649752af1b28b3dc29a1556eee781e4a4c3a1f7f53f90fa834de098c4d";
+/** `cast abi-encode "f(address)" $AUTHORITY`. */
+const ADDRESS_VALUE =
+  "0x0000000000000000000000000b300013cd54a8f1ac40981f80faaa18b8cc1e4c";
+/** `ADDRESS_VALUE` with its 12 padding bytes set. */
+const DIRTY_ADDRESS_VALUE =
+  "0xffffffffffffffffffffffff0b300013cd54a8f1ac40981f80faaa18b8cc1e4c";
+/** `cast abi-encode "f(uint256)" 1000000`. */
+const UINT256_VALUE =
+  "0x00000000000000000000000000000000000000000000000000000000000f4240";
+/** `cast abi-encode "f(uint256,uint256)" 1000000 1`. */
+const TWO_UINT256_VALUE =
+  "0x00000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000000000000001";
+/** `cast abi-encode "f((address,uint256))" "($AUTHORITY,1000000)"`. */
+const STATIC_TUPLE_VALUE =
+  "0x0000000000000000000000000b300013cd54a8f1ac40981f80faaa18b8cc1e4c00000000000000000000000000000000000000000000000000000000000f4240";
+/** `cast abi-encode "f(address[])" "[$AUTHORITY,$DELEGATE]"`. */
+const ADDRESS_ARRAY_VALUE =
+  "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000b300013cd54a8f1ac40981f80faaa18b8cc1e4c00000000000000000000000000000000000000000000000000000000000000d1";
+/** `cast abi-encode "f((string,uint256))" "(st0x.rbac.us.v1,1000000)"`. */
+const STRING_TUPLE_VALUE =
+  "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000f737430782e726261632e75732e76310000000000000000000000000000000000";
+/** `cast abi-encode "f(string,uint256)" st0x.rbac.us.v1 1000000`: the tuple's fields as flat params; `cast abi-decode --input "f((string,uint256))"` rejects it. */
+const STRING_TUPLE_FLAT_VALUE =
+  "0x000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000f737430782e726261632e75732e76310000000000000000000000000000000000";
 
 function bindingId(registry: string, authority: string, name: string): string {
   return registry.concat(authority.slice(2)).concat(name.slice(2));
@@ -194,6 +229,9 @@ function rowIdIn(tx: string, logIndex: i32): string {
 function storedTypeHash(valueType: string): string {
   if (valueType == "address") return ADDRESS_HASH;
   if (valueType == "(address,uint256)") return TUPLE_HASH;
+  if (valueType == "address[]") return ADDRESS_ARRAY_HASH;
+  if (valueType == "(string,uint256)") return STRING_TUPLE_HASH;
+  if (valueType == "foo") return FOO_HASH;
   assert.stringEquals(valueType, "uint256");
   return UINT256_HASH;
 }
@@ -491,6 +529,148 @@ describe("ConfigRegistryV5 Register", () => {
     assert.fieldEquals("ConfigBinding", id, "valueTypeHash", TUPLE_HASH);
     assert.fieldEquals("ConfigBinding", id, "registerCount", "2");
     assert.entityCount("ConfigRegister", 2);
+  });
+});
+
+function assertRegisteredStatus(
+  valueType: string,
+  typeHash: string,
+  value: string,
+  status: string,
+): void {
+  registerStoring(
+    TX_HASH.toHexString(),
+    AUTHORITY,
+    US_NAME,
+    valueType,
+    typeHash,
+    value,
+    100,
+    3,
+  );
+  let id = bindingId(REGISTRY, AUTHORITY, US_NAME);
+  assert.fieldEquals("ConfigRegister", mockRowId(3), "status", status);
+  assert.fieldEquals("ConfigRegister", mockRowId(3), "value", value);
+  assert.fieldEquals("ConfigBinding", id, "status", status);
+  assert.fieldEquals("ConfigBinding", id, "value", value);
+}
+
+describe("ConfigRegistryV5 Register value status", () => {
+  afterEach(clearStore);
+
+  test("a canonical address is VALID", () => {
+    assertRegisteredStatus("address", ADDRESS_HASH, ADDRESS_VALUE, "VALID");
+  });
+
+  test("a canonical uint256 is VALID", () => {
+    assertRegisteredStatus("uint256", UINT256_HASH, UINT256_VALUE, "VALID");
+  });
+
+  test("a canonical static tuple is VALID", () => {
+    assertRegisteredStatus(
+      "(address,uint256)",
+      TUPLE_HASH,
+      STATIC_TUPLE_VALUE,
+      "VALID",
+    );
+  });
+
+  test("a canonical address[] is VALID", () => {
+    assertRegisteredStatus(
+      "address[]",
+      ADDRESS_ARRAY_HASH,
+      ADDRESS_ARRAY_VALUE,
+      "VALID",
+    );
+  });
+
+  test("a dynamic tuple encoded as one value is VALID", () => {
+    assertRegisteredStatus(
+      "(string,uint256)",
+      STRING_TUPLE_HASH,
+      STRING_TUPLE_VALUE,
+      "VALID",
+    );
+  });
+
+  test("a decoded type that misses the stored type hash is TYPE_HASH_MISMATCH", () => {
+    assertRegisteredStatus(
+      "address",
+      ADDRESS_NUL_HASH,
+      ADDRESS_VALUE,
+      "TYPE_HASH_MISMATCH",
+    );
+  });
+
+  test("a type that is not an ABI type is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus("foo", FOO_HASH, ADDRESS_VALUE, "VALUE_NOT_DECODABLE");
+  });
+
+  test("a uint256 shorter than a word is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "uint256",
+      UINT256_HASH,
+      UINT256_VALUE.slice(0, UINT256_VALUE.length - 2),
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("a dynamic tuple encoded as flat params is VALUE_NOT_DECODABLE", () => {
+    assertRegisteredStatus(
+      "(string,uint256)",
+      STRING_TUPLE_HASH,
+      STRING_TUPLE_FLAT_VALUE,
+      "VALUE_NOT_DECODABLE",
+    );
+  });
+
+  test("an address with dirty padding is VALUE_NOT_CANONICAL", () => {
+    assertRegisteredStatus(
+      "address",
+      ADDRESS_HASH,
+      DIRTY_ADDRESS_VALUE,
+      "VALUE_NOT_CANONICAL",
+    );
+  });
+
+  test("a uint256 followed by a trailing word is VALUE_NOT_CANONICAL", () => {
+    assertRegisteredStatus(
+      "uint256",
+      UINT256_HASH,
+      TWO_UINT256_VALUE,
+      "VALUE_NOT_CANONICAL",
+    );
+  });
+
+  test("a uint256 followed by a trailing byte is VALUE_NOT_CANONICAL", () => {
+    assertRegisteredStatus(
+      "uint256",
+      UINT256_HASH,
+      UINT256_VALUE.concat("00"),
+      "VALUE_NOT_CANONICAL",
+    );
+  });
+
+  test("a rebind moves the binding's status and each Register keeps its own", () => {
+    let id = bindingId(REGISTRY, AUTHORITY, US_NAME);
+    register(AUTHORITY, US_NAME, "address", ADDRESS_VALUE, 100, 3);
+    assert.fieldEquals("ConfigBinding", id, "status", "VALID");
+
+    registerIn(OTHER_TX, AUTHORITY, US_NAME, "address", DIRTY_ADDRESS_VALUE, 250, 1);
+    assert.fieldEquals("ConfigBinding", id, "status", "VALUE_NOT_CANONICAL");
+
+    registerIn(THIRD_TX, AUTHORITY, US_NAME, "uint256", UINT256_VALUE, 300, 2);
+    assert.fieldEquals("ConfigBinding", id, "status", "VALID");
+    assert.fieldEquals("ConfigBinding", id, "registerCount", "3");
+
+    assert.fieldEquals("ConfigRegister", mockRowId(3), "status", "VALID");
+    assert.fieldEquals(
+      "ConfigRegister",
+      rowIdIn(OTHER_TX, 1),
+      "status",
+      "VALUE_NOT_CANONICAL",
+    );
+    assert.fieldEquals("ConfigRegister", rowIdIn(THIRD_TX, 2), "status", "VALID");
   });
 });
 
