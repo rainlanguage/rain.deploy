@@ -31,11 +31,11 @@ import {
 } from "./event-mocks.test";
 
 const REGISTRY = "0x1a4b89828eb2dd5f3a353bd98472512f371ce408";
-const WRITER = "0x0b300013cd54a8f1ac40981f80faaa18b8cc1e4c";
+const WRITER = "0x1234567890123456789012345678901234567890";
 const SAFE = "0x00000000000000000000000000000000000000d1";
-/** `keccak256("st0x.deploy")`, from `cast keccak`: `LibStoxMigrations.NAMESPACE`. */
+/** `keccak256("acme.deploy")`, from `cast keccak`. */
 const NAMESPACE =
-  "0xd9cec8396b568ba46ea521970e5edeac9163854e75287e989c213c3e9e84bda4";
+  "0x170900825c559c8c2d7e17228df2416947907da566cb9ba49f2a2dbcb3adec94";
 /** `MIGRATION_HEAD_GENESIS`, from `cast keccak`. */
 const GENESIS =
   "0xd85a7f14bb19a07649810ac09029cc9c29667e4059cb83e258bc52e213365d3f";
@@ -45,25 +45,25 @@ const MIGRATION_2 =
   "0x0000000000000000000000000000000000000000000000000000000000000002";
 /** `keccak256(abi.encode(WRITER, NAMESPACE, MIGRATION_1))`, from `cast keccak $(cast abi-encode "f(address,bytes32,bytes32)" …)`. */
 const SUBJECT_1 =
-  "0x0b7c43b417d2da831de8bf4c0ddf35ac27334572da1b915eb3863a9b7f65fe6a";
+  "0x5aa3e9b4aa8bb0b7baaf271fea4f8bac3950901432d7410abd34e0dcd380a4fd";
 /** An empty rain meta document: just the `RainMetaDocumentV1` magic. */
 const META = "0xff0a89c674ee7874";
-/** `keccak256("st0x.deploy.v4-registries")`, from `cast keccak`. */
+/** `keccak256("acme.deploy.v4-registries")`, from `cast keccak`. */
 const MIGRATION_NAMED =
-  "0xee8fc583fd5fffb64f1c51ed7277ef0ef797d2f9b2e1e639d669000d340bf6c9";
+  "0x74990da77a1ef7bb23bde9f14a61b397a0f7a6f45d7147d4a1f193e6596116dc";
 /** `keccak256(abi.encode(WRITER, NAMESPACE, MIGRATION_NAMED))`, from `cast keccak $(cast abi-encode "f(address,bytes32,bytes32)" …)`. */
 const SUBJECT_NAMED =
-  "0x2dc27d3c481964e1f5751e6affc732327f92c2111eb6db6bd4db577638a4f1ef";
+  "0x2e1b9f73f5c55866f9d13b74499573a6530193cb253f6d7e5acb1835fcedd36f";
 /** From `RainMetaDocumentV1Item::cbor_encode_seq` (rain.metadata). */
 const P = "0xff0a89c674ee7874";
-const NAMESPACE_ITEM = "a2004b737430782e6465706c6f79011bff82e354bb91c055";
+const NAMESPACE_ITEM = "a2004b61636d652e6465706c6f79011bff82e354bb91c055";
 const MIGRATION_ITEM =
-  "a2005819737430782e6465706c6f792e76342d72656769737472696573011bffae12bf8892cc25";
+  "a200581961636d652e6465706c6f792e76342d72656769737472696573011bffae12bf8892cc25";
 const OTHER_MIGRATION_ITEM =
-  "a20051737430782e6465706c6f792e6f74686572011bffae12bf8892cc25";
+  "a2005161636d652e6465706c6f792e6f74686572011bffae12bf8892cc25";
 /** The namespace and migration preimages under the config registry magics. */
 const CONFIG_ITEMS =
-  "a2004b737430782e6465706c6f79011bffcdcfae6227d5e9a2005819737430782e6465706c6f792e76342d72656769737472696573011bffcdb2cc1b1d53be";
+  "a2004b61636d652e6465706c6f79011bffcdcfae6227d5e9a200581961636d652e6465706c6f792e76342d72656769737472696573011bffcdb2cc1b1d53be";
 
 function lineId(registry: string): string {
   return registry.concat(WRITER.slice(2)).concat(NAMESPACE.slice(2));
@@ -425,7 +425,7 @@ describe("MigrationRegistryV5 unscoped delegates", () => {
   });
 });
 
-const VERIFIED = "true|st0x.deploy|st0x.deploy.v4-registries";
+const VERIFIED = "true|acme.deploy|acme.deploy.v4-registries";
 const UNVERIFIED = "false|null|null";
 function verifiedFor(metaHex: string): string {
   migrate(MIGRATION_NAMED, 100, 2);
