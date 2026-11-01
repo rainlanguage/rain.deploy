@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-DCL-1.0
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-import { Bytes, crypto, ethereum } from "@graphprotocol/graph-ts";
+import { Bytes, crypto } from "@graphprotocol/graph-ts";
 import {
   Approved,
   ConfigRegistryV5,
@@ -12,7 +12,8 @@ import {
   RevokedUnscoped,
 } from "../generated/ConfigRegistryV5/ConfigRegistryV5";
 import { ConfigBinding, ConfigRegister } from "../generated/schema";
-import { isCanonicalAbiType } from "./lib/abitype";
+import { AbiEncoding, abiEncodingStatus } from "./lib/abiencoding";
+import { parseAbiType } from "./lib/abitype";
 import { ContractKind, getOrCreateContract } from "./lib/contract";
 import { logRowId } from "./lib/event";
 import {
@@ -40,16 +41,15 @@ export function configValueStatus(
   if (valueType === null) {
     return ConfigValueStatus.TYPE_HASH_MISMATCH;
   }
-  // ethabi-based graph-node reads an unknown type name as uint8, so the grammar is checked here.
-  if (!isCanonicalAbiType(valueType!)) {
+  let t = parseAbiType(valueType!);
+  if (t === null) {
     return ConfigValueStatus.VALUE_NOT_DECODABLE;
   }
-  let decoded = ethereum.decode(valueType!, value);
-  if (decoded === null) {
+  let encoding = abiEncodingStatus(t!, value);
+  if (encoding == AbiEncoding.NOT_DECODABLE) {
     return ConfigValueStatus.VALUE_NOT_DECODABLE;
   }
-  let encoded = ethereum.encode(decoded!);
-  if (encoded === null || !encoded!.equals(value)) {
+  if (encoding == AbiEncoding.NOT_CANONICAL) {
     return ConfigValueStatus.VALUE_NOT_CANONICAL;
   }
   return ConfigValueStatus.VALID;
