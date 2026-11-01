@@ -12,8 +12,8 @@ const CHAR_COMMA: i32 = 44;
 const CHAR_OPEN_BRACKET: i32 = 91;
 const CHAR_CLOSE_BRACKET: i32 = 93;
 
-/** ethereum.decode recurses host-side once per enclosing tuple and array dimension on the path to an element. */
-const MAX_NESTING: i32 = 32;
+/** alloy's decode recursion limit is 16 and a dynamic level spends two, so 8 levels decode whatever the data. */
+const MAX_NESTING: i32 = 8;
 
 function isDigit(c: i32): bool {
   return c >= CHAR_0 && c <= CHAR_9;
