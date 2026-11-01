@@ -6,6 +6,13 @@ enum ContractKind {
   MIGRATION_REGISTRY_V5
 }
 
+enum ConfigValueStatus {
+  VALID
+  TYPE_HASH_MISMATCH
+  VALUE_NOT_DECODABLE
+  VALUE_NOT_CANONICAL
+}
+
 type Contract @entity {
   id: Bytes!
   kind: ContractKind!
@@ -23,6 +30,7 @@ type ConfigBinding @entity {
   "Null unless it hashes to `valueTypeHash`: graph-node decodes the emitted string lossily."
   valueType: String
   valueTypeHash: Bytes!
+  status: ConfigValueStatus!
   boundAtTimestamp: BigInt!
   registerCount: Int!
   registers: [ConfigRegister!]! @derivedFrom(field: "binding")
@@ -38,6 +46,7 @@ type ConfigRegister @entity(immutable: true) {
   "Null unless it hashes to `valueTypeHash`: graph-node decodes the emitted string lossily."
   valueType: String
   valueTypeHash: Bytes!
+  status: ConfigValueStatus!
   metas: [RegistryMeta!]! @derivedFrom(field: "configRegister")
   blockNumber: BigInt!
   blockTimestamp: BigInt!

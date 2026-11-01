@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-DCL-1.0
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-import { Bytes, crypto } from "@graphprotocol/graph-ts";
+import { Bytes, crypto, ethereum } from "@graphprotocol/graph-ts";
 import {
   Approved,
   ConfigRegistryV5,
@@ -22,6 +22,33 @@ import {
   recordMetaSubjectBinding,
   registryMetaSubject,
 } from "./lib/registry";
+
+// `graph codegen` renders an enum field as a plain `string`, so the schema's `ConfigValueStatus` values live here.
+export namespace ConfigValueStatus {
+  export const VALID = "VALID";
+  export const TYPE_HASH_MISMATCH = "TYPE_HASH_MISMATCH";
+  export const VALUE_NOT_DECODABLE = "VALUE_NOT_DECODABLE";
+  export const VALUE_NOT_CANONICAL = "VALUE_NOT_CANONICAL";
+}
+
+/** `valueType` is null when the emitted type string does not hash to `valueTypeHash`. */
+export function configValueStatus(
+  valueType: string | null,
+  value: Bytes,
+): string {
+  if (valueType === null) {
+    return ConfigValueStatus.TYPE_HASH_MISMATCH;
+  }
+  let decoded = ethereum.decode(valueType!, value);
+  if (decoded === null) {
+    return ConfigValueStatus.VALUE_NOT_DECODABLE;
+  }
+  let encoded = ethereum.encode(decoded!);
+  if (encoded === null || !encoded!.equals(value)) {
+    return ConfigValueStatus.VALUE_NOT_CANONICAL;
+  }
+  return ConfigValueStatus.VALID;
+}
 
 /** `ConfigBinding.id`: registry ++ authority ++ the `bytes32` name. */
 export function configBindingId(
@@ -53,6 +80,7 @@ export function handleConfigRegistryV5Register(event: Register): void {
   ) {
     valueType = null;
   }
+  let status = configValueStatus(valueType, event.params.value);
   let subject = configMetaSubject(authority, name);
   let registry = getOrCreateContract(
     event.address,
@@ -72,6 +100,7 @@ export function handleConfigRegistryV5Register(event: Register): void {
   binding.value = event.params.value;
   binding.valueType = valueType;
   binding.valueTypeHash = valueTypeHash;
+  binding.status = status;
   binding.sender = event.params.sender;
   binding.boundAtBlock = event.block.number;
   binding.boundAtTimestamp = event.block.timestamp;
@@ -84,6 +113,7 @@ export function handleConfigRegistryV5Register(event: Register): void {
   row.value = event.params.value;
   row.valueType = valueType;
   row.valueTypeHash = valueTypeHash;
+  row.status = status;
   row.blockNumber = event.block.number;
   row.blockTimestamp = event.block.timestamp;
   row.transactionHash = event.transaction.hash;
