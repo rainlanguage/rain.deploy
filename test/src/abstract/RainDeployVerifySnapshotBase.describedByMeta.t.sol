@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeployDeclaration, DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {IDescribedByMetaV1} from "rain-metadata-0.1.43/src/interface/IDescribedByMetaV1.sol";
+import {IDescribedByMetaV1} from "rain-metadata-0.1.45/src/interface/IDescribedByMetaV1.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {DescribedByMetaMismatch, MetaBoardUndeclared} from "../../../src/lib/LibRainDeployDescribedByMeta.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";

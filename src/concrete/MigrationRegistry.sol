@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {IMigrationRegistryV5, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV5.sol";
 import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
-import {LibIMetaBoardV1_2} from "rain-metadata-0.1.43/src/lib/LibIMetaBoardV1_2.sol";
+import {LibIMetaBoardV1_2} from "rain-metadata-0.1.45/src/lib/LibIMetaBoardV1_2.sol";
 
 /// @dev One line's record of one migration. Written in one call, so a record
 /// can never hold one half of itself.

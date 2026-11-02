@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {IConfigRegistryV5} from "../interface/IConfigRegistryV5.sol";
 import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
-import {LibIMetaBoardV1_2} from "rain-metadata-0.1.43/src/lib/LibIMetaBoardV1_2.sol";
+import {LibIMetaBoardV1_2} from "rain-metadata-0.1.45/src/lib/LibIMetaBoardV1_2.sol";
 
 /// @title ConfigRegistry
 /// @notice The whole of `IConfigRegistryV5`: any account binds a `bytes32` name

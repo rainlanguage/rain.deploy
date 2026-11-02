@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IMetaBoardV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaBoardV1_2.sol";
+import {IMetaBoardV1_2} from "rain-metadata-0.1.45/src/interface/unstable/IMetaBoardV1_2.sol";
 
 struct RecordedMetaEmission {
     uint256 chainId;
