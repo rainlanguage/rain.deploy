@@ -1,0 +1,21 @@
+name: Deploy subgraph
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    env:
+      SUBGRAPH_NAME: rain-deploy-registry
+      # subgraph-deploy probes this public query base and skips a version that already answers.
+      ORMI_QUERY_BASE: https://subgraph.api.ormilabs.com/api/public/9f4fc2fa-4a15-44f7-a7c1-66fdaa518a71
+    steps:
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          gc-max-store-size-linux: 1G
+      - run: nix develop github:rainlanguage/rainix#subgraph-shell -c subgraph-deploy
+        env:
+          ORMI_DEPLOY_KEY: ${{ secrets.ORMI_DEPLOY_KEY }}

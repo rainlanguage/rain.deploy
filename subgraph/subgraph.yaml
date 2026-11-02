@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: LicenseRef-DCL-1.0
+# SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+specVersion: 0.0.4
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: ConfigRegistryV5
+    network: template
+    source:
+      abi: ConfigRegistryV5
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Contract
+        - ConfigBinding
+        - ConfigRegister
+        - RegistryDelegate
+        - RegistryDelegateChange
+        - RegistryUnscopedDelegate
+        - RegistryUnscopedDelegateChange
+        - RegistryMeta
+        - RegistryMetaSubject
+      abis:
+        - name: ConfigRegistryV5
+          file: ./abis/ConfigRegistryV5.json
+      eventHandlers:
+        - event: Register(address,address,bytes32,string,bytes)
+          handler: handleConfigRegistryV5Register
+        - event: Approved(address,bytes32,address)
+          handler: handleConfigRegistryV5Approved
+        - event: Revoked(address,bytes32,address)
+          handler: handleConfigRegistryV5Revoked
+        - event: ApprovedUnscoped(address,address)
+          handler: handleConfigRegistryV5ApprovedUnscoped
+        - event: RevokedUnscoped(address,address)
+          handler: handleConfigRegistryV5RevokedUnscoped
+        - event: MetaV1_2(address,bytes32,bytes)
+          handler: handleConfigRegistryV5MetaV1_2
+      file: ./src/configregistry.ts
+  - kind: ethereum/contract
+    name: MigrationRegistryV5
+    network: template
+    source:
+      abi: MigrationRegistryV5
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Contract
+        - MigrationLine
+        - MigrationRecord
+        - RegistryDelegate
+        - RegistryDelegateChange
+        - RegistryUnscopedDelegate
+        - RegistryUnscopedDelegateChange
+        - RegistryMeta
+        - RegistryMetaSubject
+      abis:
+        - name: MigrationRegistryV5
+          file: ./abis/MigrationRegistryV5.json
+      eventHandlers:
+        - event: Migrated(address,address,bytes32,bytes32,uint256)
+          handler: handleMigrationRegistryV5Migrated
+        - event: Approved(address,bytes32,address)
+          handler: handleMigrationRegistryV5Approved
+        - event: Revoked(address,bytes32,address)
+          handler: handleMigrationRegistryV5Revoked
+        - event: ApprovedUnscoped(address,address)
+          handler: handleMigrationRegistryV5ApprovedUnscoped
+        - event: RevokedUnscoped(address,address)
+          handler: handleMigrationRegistryV5RevokedUnscoped
+        - event: MetaV1_2(address,bytes32,bytes)
+          handler: handleMigrationRegistryV5MetaV1_2
+      file: ./src/migrationregistry.ts
