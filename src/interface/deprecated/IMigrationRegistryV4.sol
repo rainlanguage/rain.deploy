@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {IRegistryDelegatesV2} from "./IRegistryDelegatesV2.sol";
-import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
+import {IMetaV1_2} from "rain-metadata-0.1.45/src/interface/unstable/IMetaV1_2.sol";
 
 /// @dev The head of a line that has never applied a migration. The first
 /// migration applied in a line names this, and every later one names the

@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {IDescribedByMetaV1} from "rain-metadata-0.1.43/src/interface/IDescribedByMetaV1.sol";
+import {IDescribedByMetaV1} from "rain-metadata-0.1.45/src/interface/IDescribedByMetaV1.sol";
 import {DescribedByMetaMismatch, LibRainDeployDescribedByMeta} from "../../../src/lib/LibRainDeployDescribedByMeta.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDescribedByMeta} from "../../concrete/MockDescribedByMeta.sol";

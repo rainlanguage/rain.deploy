@@ -98,7 +98,7 @@ rain-sol-codegen = "0.1.39"
 rain-lib-memkv = "0.2.0"
 "@openzeppelin-contracts" = "5.7.0"
 safe-global-safe-smart-account = "1.4.1-3"
-rain-metadata = "0.1.43"
+rain-metadata = "0.1.45"
 
 [soldeer]
 recursive_deps = false

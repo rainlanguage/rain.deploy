@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IDescribedByMetaV1} from "rain-metadata-0.1.43/src/interface/IDescribedByMetaV1.sol";
+import {IDescribedByMetaV1} from "rain-metadata-0.1.45/src/interface/IDescribedByMetaV1.sol";
 
 /// @title MockDescribedByMeta
 /// @notice Answers `describedByMetaV1()` with the hash it was constructed with. Held in storage, not an immutable, so

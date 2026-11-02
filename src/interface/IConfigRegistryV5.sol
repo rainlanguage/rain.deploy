@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {IRegistryDelegatesV3} from "./IRegistryDelegatesV3.sol";
-import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
+import {IMetaV1_2} from "rain-metadata-0.1.45/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title IConfigRegistryV5
 /// @notice A registry of `bytes32` names to ABI-encoded values, keyed by the

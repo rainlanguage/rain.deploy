@@ -9,7 +9,7 @@ import {IMigrationRegistryV5, Prerequisite} from "../../../src/interface/IMigrat
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 import {rainMeta, isNotRainMeta} from "../../lib/RainMeta.sol";
-import {NotRainMetaV1} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
+import {NotRainMetaV1} from "rain-metadata-0.1.45/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title MigrationRegistryMetaTest
 /// @notice The migration writes' `meta`: emitted as `MetaV1_2` by the writer

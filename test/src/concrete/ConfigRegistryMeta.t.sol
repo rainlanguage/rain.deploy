@@ -9,7 +9,7 @@ import {IConfigRegistryV5} from "../../../src/interface/IConfigRegistryV5.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {VALUE_TYPE} from "../../lib/ConfigTestBinding.sol";
 import {rainMeta, isNotRainMeta} from "../../lib/RainMeta.sol";
-import {NotRainMetaV1} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
+import {NotRainMetaV1} from "rain-metadata-0.1.45/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title ConfigRegistryMetaTest
 /// @notice `registerV5`'s `meta`: emitted as `MetaV1_2` by the writer about

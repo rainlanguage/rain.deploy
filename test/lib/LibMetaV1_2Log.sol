@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {VmSafe} from "forge-std-1.17.0/src/Vm.sol";
-import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
+import {IMetaV1_2} from "rain-metadata-0.1.45/src/interface/unstable/IMetaV1_2.sol";
 import {LocalLogsForkVm} from "../concrete/LocalLogsForkVm.sol";
 
 /// @title LibMetaV1_2Log
