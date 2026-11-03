@@ -7,7 +7,8 @@ import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 
 /// @title LocalForkVm
 /// @notice Forks each catalogue alias as the local EVM at its catalogue chain id, or at `sReportedChainId` once set,
-/// copying the storage set for a fork each time it is selected, and formats addresses as the cheatcodes do.
+/// copying the storage and etching the code set for a fork each time it is selected, and formats addresses as the
+/// cheatcodes do.
 contract LocalForkVm {
     /// A storage copy made on selecting a fork.
     /// @param from The account copied.
@@ -15,6 +16,14 @@ contract LocalForkVm {
     struct StorageCopy {
         address from;
         address to;
+    }
+
+    /// A code etch made on selecting a fork.
+    /// @param target The account etched.
+    /// @param code The code `target` is given.
+    struct CodeEtch {
+        address target;
+        bytes code;
     }
 
     /// The cheatcodes this stands in front of.
@@ -25,6 +34,9 @@ contract LocalForkVm {
 
     /// The storage copies made on selecting each fork id.
     mapping(uint256 => StorageCopy[]) internal sStorageCopies;
+
+    /// The code etches made on selecting each fork id.
+    mapping(uint256 => CodeEtch[]) internal sCodeEtches;
 
     /// Makes every fork selected from now on report `chainId`.
     /// @param chainId The chain id to report.
@@ -49,14 +61,26 @@ contract LocalForkVm {
         sStorageCopies[forkId].push(StorageCopy({from: from, to: to}));
     }
 
+    /// Makes `target` hold `code` each time fork `forkId` is selected from now on.
+    /// @param forkId The fork id.
+    /// @param target The account etched.
+    /// @param code The code `target` is given.
+    function etchOnSelect(uint256 forkId, address target, bytes calldata code) external {
+        sCodeEtches[forkId].push(CodeEtch({target: target, code: code}));
+    }
+
     /// Sets the local EVM's chain id to the fork's, or to `sReportedChainId` once set, then makes the fork's storage
-    /// copies.
+    /// copies and code etches.
     /// @param forkId The fork id.
     function selectFork(uint256 forkId) external {
         VM.chainId(sReportedChainId == 0 ? forkId : sReportedChainId);
         StorageCopy[] storage copies = sStorageCopies[forkId];
         for (uint256 i = 0; i < copies.length; i++) {
             VM.copyStorage(copies[i].from, copies[i].to);
+        }
+        CodeEtch[] storage etches = sCodeEtches[forkId];
+        for (uint256 i = 0; i < etches.length; i++) {
+            VM.etch(etches[i].target, etches[i].code);
         }
     }
 
