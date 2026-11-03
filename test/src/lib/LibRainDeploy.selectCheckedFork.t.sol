@@ -30,7 +30,7 @@ contract LibRainDeploySelectCheckedForkTest is Test {
         return LibRainDeploy.declaredNetworkConfigs(names)[0];
     }
 
-    function dependencies(address first, address second) internal pure returns (DeployDependency[] memory) {
+    function declaredDependencies(address first, address second) internal pure returns (DeployDependency[] memory) {
         DeployDependency[] memory declared = new DeployDependency[](2);
         declared[0] = DeployDependency({deployedAddress: first, runtimeCode: hex"00"});
         declared[1] = DeployDependency({deployedAddress: second, runtimeCode: hex"01"});
@@ -61,7 +61,7 @@ contract LibRainDeploySelectCheckedForkTest is Test {
             abi.encodeWithSelector(LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 42161, 1)
         );
         this.externalSelectCheckedFork(
-            catalogued(LibRainDeploy.ARBITRUM_ONE), 42161, dependencies(address(0xabc), address(0xdef))
+            catalogued(LibRainDeploy.ARBITRUM_ONE), 42161, declaredDependencies(address(0xabc), address(0xdef))
         );
     }
 
@@ -72,7 +72,7 @@ contract LibRainDeploySelectCheckedForkTest is Test {
             abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, address(0xdef))
         );
         this.externalSelectCheckedFork(
-            catalogued(LibRainDeploy.POLYGON), 137, dependencies(address(0xabc), address(0xdef))
+            catalogued(LibRainDeploy.POLYGON), 137, declaredDependencies(address(0xabc), address(0xdef))
         );
     }
 
@@ -90,7 +90,7 @@ contract LibRainDeploySelectCheckedForkTest is Test {
             )
         );
         this.externalSelectCheckedFork(
-            catalogued(LibRainDeploy.POLYGON), 137, dependencies(address(0xabc), address(0xdef))
+            catalogued(LibRainDeploy.POLYGON), 137, declaredDependencies(address(0xabc), address(0xdef))
         );
     }
 
@@ -99,7 +99,7 @@ contract LibRainDeploySelectCheckedForkTest is Test {
         vm.etch(address(0xabc), hex"00");
         vm.etch(address(0xdef), hex"01");
         this.externalSelectCheckedFork(
-            catalogued(LibRainDeploy.POLYGON), 137, dependencies(address(0xabc), address(0xdef))
+            catalogued(LibRainDeploy.POLYGON), 137, declaredDependencies(address(0xabc), address(0xdef))
         );
         assertEq(block.chainid, 137);
     }
