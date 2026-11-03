@@ -23,6 +23,9 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
     /// The local fork Vm the batch forks with.
     LocalForkVm internal sForkVm;
 
+    /// The network each step call was handed, in call order.
+    string[] internal sStepNetworks;
+
     /// The address each step call etched, in call order.
     address[] internal sStepTargets;
 
@@ -40,11 +43,16 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
         revert DeployStepWasReached();
     }
 
-    /// Records the step data's address, then etches `hex"00"` there and reports it.
+    /// Records the network and the step data's address, then etches `hex"00"` there and reports it.
+    /// @param network The network the step is handed.
     /// @param stepData The address to etch, encoded.
     /// @return The etched address.
-    function recordingEtchingDeployStep(Vm, string memory, address, bytes memory stepData) internal returns (address) {
+    function recordingEtchingDeployStep(Vm, string memory network, address, bytes memory stepData)
+        internal
+        returns (address)
+    {
         address target = abi.decode(stepData, (address));
+        sStepNetworks.push(network);
         sStepTargets.push(target);
         vm.etch(target, hex"00");
         return target;
@@ -77,13 +85,18 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
         return LibRainDeploy.declaredNetworkConfigs(names);
     }
 
-    /// A one-network row etching at `target` and expecting `code` there.
+    /// A row etching at `target` on every network and expecting `code` there.
+    /// @param networksLength How many networks.
     /// @param target The expected address.
     /// @param code The code the row expects at `target`.
     /// @return The row.
-    function etchingRow(address target, bytes memory code) internal pure returns (DeployStepRow memory) {
+    function etchingRow(uint256 networksLength, address target, bytes memory code)
+        internal
+        pure
+        returns (DeployStepRow memory)
+    {
         return DeployStepRow({
-            deploys: LibRainDeploy.everyNetwork(1, abi.encode(target), target, target),
+            deploys: LibRainDeploy.everyNetwork(networksLength, abi.encode(target), target, target),
             expectedCodeHash: keccak256(code)
         });
     }
@@ -119,6 +132,26 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
             recordingEtchingDeployStep,
             rows,
             new DeployDependency[](0)
+        );
+    }
+
+    /// External wrapper for `LibRainDeploy.deployStepsToNetworks` over the local fork Vm on Arbitrum One then Polygon.
+    /// @param reachable Whether the step etches and records rather than reverting if reached.
+    /// @param rows The rows.
+    /// @param dependencies The declared dependencies.
+    /// @return The fork of each network.
+    function externalLocalTwoNetworkSteps(
+        bool reachable,
+        DeployStepRow[] memory rows,
+        DeployDependency[] memory dependencies
+    ) external returns (uint256[] memory) {
+        return LibRainDeploy.deployStepsToNetworks(
+            Vm(address(sForkVm)),
+            twoNetworks(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON),
+            address(this),
+            reachable ? recordingEtchingDeployStep : unreachableDeployStep,
+            rows,
+            dependencies
         );
     }
 
@@ -170,9 +203,9 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
         address third = address(0x123);
         vm.etch(second, hex"01");
         DeployStepRow[] memory rows = new DeployStepRow[](3);
-        rows[0] = etchingRow(first, hex"00");
-        rows[1] = etchingRow(second, hex"01");
-        rows[2] = etchingRow(third, hex"00");
+        rows[0] = etchingRow(1, first, hex"00");
+        rows[1] = etchingRow(1, second, hex"01");
+        rows[2] = etchingRow(1, third, hex"00");
 
         this.externalLocalEtchingSteps(rows);
 
@@ -190,8 +223,8 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
         address second = address(0xdef);
         vm.etch(second, hex"01");
         DeployStepRow[] memory rows = new DeployStepRow[](2);
-        rows[0] = etchingRow(first, hex"00");
-        rows[1] = etchingRow(second, hex"02");
+        rows[0] = etchingRow(1, first, hex"00");
+        rows[1] = etchingRow(1, second, hex"02");
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -232,5 +265,78 @@ contract LibRainDeployDeployStepsToNetworksTest is Test {
 
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
         assertFalse(forked, "the batch forked a network before refusing a later row");
+    }
+
+    /// Every row's step MUST be handed the network it deploys to.
+    function testEachStepIsHandedTheNetworkItDeploysTo() external {
+        address first = address(0xabc);
+        address second = address(0xdef);
+        uint256 polygonFork = sForkVm.createFork(LibRainDeploy.POLYGON);
+        sForkVm.etchOnSelect(polygonFork, first, hex"");
+        sForkVm.etchOnSelect(polygonFork, second, hex"");
+        DeployStepRow[] memory rows = new DeployStepRow[](2);
+        rows[0] = etchingRow(2, first, hex"00");
+        rows[1] = etchingRow(2, second, hex"00");
+
+        this.externalLocalTwoNetworkSteps(true, rows, new DeployDependency[](0));
+
+        assertEq(sStepNetworks.length, 4);
+        assertEq(sStepNetworks[0], LibRainDeploy.ARBITRUM_ONE);
+        assertEq(sStepNetworks[1], LibRainDeploy.ARBITRUM_ONE);
+        assertEq(sStepNetworks[2], LibRainDeploy.POLYGON);
+        assertEq(sStepNetworks[3], LibRainDeploy.POLYGON);
+    }
+
+    /// A later network holding other code at a row's address MUST be refused, naming that network.
+    function testOtherCodeOnALaterNetworkIsRefusedNamingIt() external {
+        address target = address(0xabc);
+        sForkVm.etchOnSelect(sForkVm.createFork(LibRainDeploy.ARBITRUM_ONE), target, hex"00");
+        sForkVm.etchOnSelect(sForkVm.createFork(LibRainDeploy.POLYGON), target, hex"01");
+        DeployStepRow[] memory rows = new DeployStepRow[](1);
+        rows[0] = etchingRow(2, target, hex"00");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.POLYGON,
+                target,
+                keccak256(hex"00"),
+                keccak256(hex"01")
+            )
+        );
+        this.externalLocalTwoNetworkSteps(false, rows, new DeployDependency[](0));
+    }
+
+    /// A dependency missing on a later network only MUST be refused, naming that network.
+    function testDependencyMissingOnALaterNetworkIsRefusedNamingIt() external {
+        address target = address(0xabc);
+        address dependency = address(0xdef);
+        vm.etch(target, hex"00");
+        sForkVm.etchOnSelect(sForkVm.createFork(LibRainDeploy.ARBITRUM_ONE), dependency, hex"00");
+        sForkVm.etchOnSelect(sForkVm.createFork(LibRainDeploy.POLYGON), dependency, hex"");
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency(dependency, hex"00");
+        DeployStepRow[] memory rows = new DeployStepRow[](1);
+        rows[0] = etchingRow(2, target, hex"00");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, dependency)
+        );
+        this.externalLocalTwoNetworkSteps(false, rows, dependencies);
+    }
+
+    /// A missing dependency MUST be refused on a network before any of its rows' steps run.
+    function testMissingDependencyIsRefusedBeforeAnyRowDeploys() external {
+        address dependency = address(0xdef);
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency(dependency, hex"00");
+        DeployStepRow[] memory rows = new DeployStepRow[](2);
+        rows[0] = etchingRow(2, address(0xabc), hex"00");
+        rows[1] = etchingRow(2, address(0x123), hex"00");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, dependency)
+        );
+        this.externalLocalTwoNetworkSteps(false, rows, dependencies);
     }
 }
