@@ -192,6 +192,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         return (deploys.expectedAddresses, forkIds);
     }
 
+    /// `LibRainDeploy.deployStepToNetworks` with `preDeployCheck` run on each network's fork after its chain id and
+    /// dependency checks and before its step.
     /// @param d The declaration.
     /// @param vm The Vm instance to broadcast with.
     /// @param configs The networks.
@@ -207,16 +209,34 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         DeploySuite memory suite,
         NetworkDeploys memory deploys
     ) internal returns (uint256[] memory) {
-        return LibRainDeploy.deployStepToNetworks(
-            vm,
-            configs,
-            LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
-            deployStep(d, suite),
-            deploys,
-            suite.storedBytecodeHash,
-            suite.dependencies
-        );
+        LibRainDeploy.checkNetworkDeploys(configs, deploys);
+        address deployer = LibRainDeploy.rememberDeployer(vm, deployerPrivateKey);
+        function(Vm, string memory, address, bytes memory) internal returns (address) step = deployStep(d, suite);
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
+        for (uint256 i = 0; i < configs.length; i++) {
+            LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], suite.dependencies);
+            preDeployCheck(d, suite, configs[i]);
+            LibRainDeploy.deployStepToSelectedFork(
+                vm,
+                configs[i].name,
+                deployer,
+                step,
+                deploys.deployStepData[i],
+                deploys.expectedAddresses[i],
+                suite.storedBytecodeHash
+            );
+        }
+        return forkIds;
     }
+
+    /// Asserts `network`'s state on its selected fork before `suite` is deployed there; a revert aborts the
+    /// broadcast. A no-op unless overridden.
+    /// @param d The declaration.
+    /// @param suite The suite about to be deployed.
+    /// @param network The network whose fork is selected.
+    function preDeployCheck(DeployDeclaration memory d, DeploySuite memory suite, SupportedNetwork memory network)
+        internal
+        virtual {}
 
     /// @param d The declaration.
     /// @param suite The suite, on every network in `configs`.
