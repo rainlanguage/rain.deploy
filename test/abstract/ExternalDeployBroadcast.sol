@@ -4,7 +4,8 @@ pragma solidity ^0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {ExternalDeploySuites} from "./ExternalDeploySuites.sol";
-import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
 import {MockOriginOwned} from "../concrete/MockOriginOwned.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
@@ -48,6 +49,14 @@ abstract contract ExternalDeployBroadcast is ExternalDeploySuites, RainDeployBro
     ) external returns (address) {
         checkSeatsNoDeployKey(declaration(), suite, chainIds, deployer);
         return new MockOriginOwned().owner();
+    }
+
+    /// `preDeployCheck` under an empty declaration.
+    /// @param suite The suite about to be deployed.
+    /// @param network The network.
+    function externalPreDeployCheck(DeploySuite memory suite, SupportedNetwork memory network) external {
+        DeployDeclaration memory d;
+        preDeployCheck(d, suite, network);
     }
 
     /// @param forkVm The Vm to fork and broadcast with.
