@@ -95,8 +95,8 @@ contract LibRainDeployCheckNetworkDeploysTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedDeployedAddress.selector,
-                address(uint160(0x1000 + index)),
-                address(uint160(0x2000 + index))
+                deploys.expectedAddresses[index],
+                deploys.derivedAddresses[index]
             )
         );
         this.externalCheckNetworkDeploys(new SupportedNetwork[](length), deploys);
