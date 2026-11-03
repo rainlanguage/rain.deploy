@@ -54,19 +54,29 @@ contract LibRainDeployDeployStepToSelectedForkTest is Test {
         return TARGET;
     }
 
+    function stepOf(Step step)
+        internal
+        pure
+        returns (function(Vm, string memory, address, bytes memory) internal returns (address))
+    {
+        if (step == Step.Unreachable) {
+            return unreachableStep;
+        }
+        if (step == Step.Etching) {
+            return etchingStep;
+        }
+        if (step == Step.EtchingOther) {
+            return etchingOtherStep;
+        }
+        if (step == Step.Misreporting) {
+            return misreportingStep;
+        }
+        return codelessStep;
+    }
+
     function externalDeployStepToSelectedFork(Step step, bytes memory data) external {
         LibRainDeploy.deployStepToSelectedFork(
-            vm,
-            LibRainDeploy.POLYGON,
-            DEPLOYER,
-            step == Step.Unreachable
-                ? unreachableStep
-                : step == Step.Etching
-                    ? etchingStep
-                    : step == Step.EtchingOther ? etchingOtherStep : step == Step.Misreporting ? misreportingStep : codelessStep,
-            data,
-            TARGET,
-            keccak256(hex"00")
+            vm, LibRainDeploy.POLYGON, DEPLOYER, stepOf(step), data, TARGET, keccak256(hex"00")
         );
     }
 
