@@ -49,7 +49,7 @@ struct DeployDependency {
     bytes runtimeCode;
 }
 
-/// What `LibRainDeploy.deployStepToNetworks` deploys on each network.
+/// What `LibRainDeploy.deployStepsToNetworks` deploys on each network, per row.
 struct NetworkDeploys {
     /// Whatever the step needs on each network.
     bytes[] deployStepData;
@@ -58,6 +58,14 @@ struct NetworkDeploys {
     /// The address the mechanism derives on each network from that network's step data, which is
     /// where the step deploys to there.
     address[] derivedAddresses;
+}
+
+/// One step of a `LibRainDeploy.deployStepsToNetworks` batch.
+struct DeployStepRow {
+    /// What the step deploys on each network.
+    NetworkDeploys deploys;
+    /// The code hash expected on every network.
+    bytes32 expectedCodeHash;
 }
 
 /// @title LibRainDeploy
@@ -843,7 +851,7 @@ library LibRainDeploy {
         return zoltuDeployedAddress;
     }
 
-    /// The one per-network loop for every mechanism.
+    /// The one per-network loop for every mechanism, as a one-row `deployStepsToNetworks`.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks, as catalogue entries.
     /// @param deployer The address to broadcast as.
@@ -861,23 +869,48 @@ library LibRainDeploy {
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
     ) internal returns (uint256[] memory) {
+        DeployStepRow[] memory rows = new DeployStepRow[](1);
+        rows[0] = DeployStepRow({deploys: deploys, expectedCodeHash: expectedCodeHash});
+        return deployStepsToNetworks(vm, networks, deployer, deployStep, rows, dependencies);
+    }
+
+    /// Deploys every row in order on each network's one fork, so a broadcast's
+    /// nonce advances across rows rather than each row replaying a fresh fork.
+    /// @param vm The Vm instance to fork and broadcast with.
+    /// @param networks The networks, as catalogue entries.
+    /// @param deployer The address to broadcast as.
+    /// @param deployStep Puts code at the expected address on the selected fork.
+    /// @param rows The steps, in deploy order.
+    /// @param dependencies Checked on every network, deployed or not.
+    /// @return The fork of each network.
+    function deployStepsToNetworks(
+        Vm vm,
+        SupportedNetwork[] memory networks,
+        address deployer,
+        function(Vm, string memory, address, bytes memory) internal returns (address) deployStep,
+        DeployStepRow[] memory rows,
+        DeployDependency[] memory dependencies
+    ) internal returns (uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
-        if (
-            deploys.deployStepData.length != networks.length || deploys.expectedAddresses.length != networks.length
-                || deploys.derivedAddresses.length != networks.length
-        ) {
-            revert DeployStepNetworksMismatch(
-                networks.length,
-                deploys.deployStepData.length,
-                deploys.expectedAddresses.length,
-                deploys.derivedAddresses.length
-            );
-        }
-        for (uint256 i = 0; i < networks.length; i++) {
-            if (deploys.derivedAddresses[i] != deploys.expectedAddresses[i]) {
-                revert UnexpectedDeployedAddress(deploys.expectedAddresses[i], deploys.derivedAddresses[i]);
+        for (uint256 r = 0; r < rows.length; r++) {
+            NetworkDeploys memory deploys = rows[r].deploys;
+            if (
+                deploys.deployStepData.length != networks.length || deploys.expectedAddresses.length != networks.length
+                    || deploys.derivedAddresses.length != networks.length
+            ) {
+                revert DeployStepNetworksMismatch(
+                    networks.length,
+                    deploys.deployStepData.length,
+                    deploys.expectedAddresses.length,
+                    deploys.derivedAddresses.length
+                );
+            }
+            for (uint256 i = 0; i < networks.length; i++) {
+                if (deploys.derivedAddresses[i] != deploys.expectedAddresses[i]) {
+                    revert UnexpectedDeployedAddress(deploys.expectedAddresses[i], deploys.derivedAddresses[i]);
+                }
             }
         }
         uint256[] memory forkIds = createForks(vm, networkNames(networks));
@@ -888,17 +921,21 @@ library LibRainDeploy {
             checkNetworkChainId(networks[i]);
             checkDeclaredDependencies(networks[i].name, dependencies);
 
-            address expectedAddress = deploys.expectedAddresses[i];
-            if (expectedAddress.code.length == 0) {
-                address stepDeployedAddress = deployStep(vm, networks[i].name, deployer, deploys.deployStepData[i]);
-                if (stepDeployedAddress != expectedAddress) {
-                    revert UnexpectedDeployedAddress(expectedAddress, stepDeployedAddress);
+            for (uint256 r = 0; r < rows.length; r++) {
+                console2.log(" - Step:", r);
+                address expectedAddress = rows[r].deploys.expectedAddresses[i];
+                if (expectedAddress.code.length == 0) {
+                    address stepDeployedAddress =
+                        deployStep(vm, networks[i].name, deployer, rows[r].deploys.deployStepData[i]);
+                    if (stepDeployedAddress != expectedAddress) {
+                        revert UnexpectedDeployedAddress(expectedAddress, stepDeployedAddress);
+                    }
+                } else {
+                    console2.log(" - Code already exists at expected address, skipping deployment");
                 }
-            } else {
-                console2.log(" - Code already exists at expected address, skipping deployment");
+                console2.log(" - Final Address:", expectedAddress);
+                checkDeployedCode(networks[i].name, expectedAddress, rows[r].expectedCodeHash);
             }
-            console2.log(" - Final Address:", expectedAddress);
-            checkDeployedCode(networks[i].name, expectedAddress, expectedCodeHash);
         }
         return forkIds;
     }
