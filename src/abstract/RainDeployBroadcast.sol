@@ -236,8 +236,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @param network The network whose fork is selected.
     function preDeployCheck(DeployDeclaration memory d, DeploySuite memory suite, SupportedNetwork memory network)
         internal
-        virtual
-    {}
+        virtual {}
 
     /// @param d The declaration.
     /// @param suite The suite, on every network in `configs`.
