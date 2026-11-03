@@ -95,9 +95,10 @@ contract RainDeployBroadcastPreDeployCheckTest is Test {
 
     /// The hook runs on a network the suite is already on, where the step is skipped.
     function testRunsOnANetworkAlreadyDeployed() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
         vm.etch(networkAddress(42161), type(MockDeployable).runtimeCode);
         vm.expectCall(MOCK_CREATE2_FACTORY, stepCall(42161), 0);
-        broadcast(sDeploy.externalMockRelease());
+        broadcast(release);
 
         PreDeployCheckCall[] memory calls = sDeploy.preDeployChecks();
         assertEq(calls.length, 2);
@@ -109,25 +110,28 @@ contract RainDeployBroadcastPreDeployCheckTest is Test {
 
     /// A fork reporting another chain is refused before the hook runs on it.
     function testChainIdIsCheckedBeforeTheHook() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
         sForkVm.setReportedChainId(1);
         sDeploy.refuseOn(42161);
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 42161, 1)
         );
-        broadcast(sDeploy.externalMockRelease());
+        broadcast(release);
     }
 
     /// A missing declared dependency is refused before the hook runs on its network.
     function testMissingDependencyIsRefusedBeforeTheHook() external {
+        DeploySuite memory release = dependentRelease(hex"00");
         sDeploy.refuseOn(42161);
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, DEPENDENCY)
         );
-        broadcast(dependentRelease(hex"00"));
+        broadcast(release);
     }
 
     /// A declared dependency holding other code is refused before the hook runs on its network.
     function testChangedDependencyIsRefusedBeforeTheHook() external {
+        DeploySuite memory release = dependentRelease(hex"00");
         vm.etch(DEPENDENCY, hex"01");
         sDeploy.refuseOn(42161);
         vm.expectRevert(
@@ -139,7 +143,7 @@ contract RainDeployBroadcastPreDeployCheckTest is Test {
                 keccak256(hex"01")
             )
         );
-        broadcast(dependentRelease(hex"00"));
+        broadcast(release);
     }
 
     /// The hook runs on a network whose declared dependencies are in place.
@@ -151,19 +155,21 @@ contract RainDeployBroadcastPreDeployCheckTest is Test {
 
     /// A hook refusing the first network aborts the broadcast before any step on any network.
     function testRefusalOnTheFirstNetworkDeploysNothing() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
         sDeploy.refuseOn(42161);
         vm.expectCall(MOCK_CREATE2_FACTORY, abi.encodeWithSelector(MockCreate2Factory.deploy.selector), 0);
         vm.expectRevert(abi.encodeWithSelector(PreDeployCheckRefused.selector, LibRainDeploy.ARBITRUM_ONE, 42161));
-        broadcast(sDeploy.externalMockRelease());
+        broadcast(release);
     }
 
     /// A hook refusing a later network reverts the whole run before that network's step.
     function testRefusalOnALaterNetworkRevertsTheRunBeforeItsStep() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
         sDeploy.refuseOn(137);
         vm.expectCall(MOCK_CREATE2_FACTORY, stepCall(42161), 1);
         vm.expectCall(MOCK_CREATE2_FACTORY, stepCall(137), 0);
         vm.expectRevert(abi.encodeWithSelector(PreDeployCheckRefused.selector, LibRainDeploy.POLYGON, 137));
-        broadcast(sDeploy.externalMockRelease());
+        broadcast(release);
     }
 
     /// The default hook does nothing: it does not revert, touches no storage and emits nothing, on any network
