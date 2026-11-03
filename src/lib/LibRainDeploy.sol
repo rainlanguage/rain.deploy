@@ -843,24 +843,11 @@ library LibRainDeploy {
         return zoltuDeployedAddress;
     }
 
-    /// The one per-network loop for every mechanism.
-    /// @param vm The Vm instance to fork and broadcast with.
+    /// Refuses an empty network set, step data, expected or derived addresses not paired one to one with `networks`,
+    /// and any derived address that is not its expected address.
     /// @param networks The networks, as catalogue entries.
-    /// @param deployer The address to broadcast as.
-    /// @param deployStep Puts code at the expected address on the selected fork.
     /// @param deploys The per-network step data, expected and derived addresses.
-    /// @param expectedCodeHash The code hash expected on every network.
-    /// @param dependencies Checked on every network, deployed or not.
-    /// @return The fork of each network.
-    function deployStepToNetworks(
-        Vm vm,
-        SupportedNetwork[] memory networks,
-        address deployer,
-        function(Vm, string memory, address, bytes memory) internal returns (address) deployStep,
-        NetworkDeploys memory deploys,
-        bytes32 expectedCodeHash,
-        DeployDependency[] memory dependencies
-    ) internal returns (uint256[] memory) {
+    function checkNetworkDeploys(SupportedNetwork[] memory networks, NetworkDeploys memory deploys) internal pure {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -880,25 +867,87 @@ library LibRainDeploy {
                 revert UnexpectedDeployedAddress(deploys.expectedAddresses[i], deploys.derivedAddresses[i]);
             }
         }
+    }
+
+    /// Selects `forkId` and refuses it unless it is `network`'s chain with every declared dependency in place.
+    /// @param vm The Vm instance to select the fork with.
+    /// @param network The network, as a catalogue entry.
+    /// @param forkId Its fork.
+    /// @param dependencies Checked whether the step deploys or not.
+    function selectCheckedFork(
+        Vm vm,
+        SupportedNetwork memory network,
+        uint256 forkId,
+        DeployDependency[] memory dependencies
+    ) internal {
+        vm.selectFork(forkId);
+        console2.log("Deploying to network:", network.name);
+        console2.log("Block number:", block.number);
+        checkNetworkChainId(network);
+        checkDeclaredDependencies(network.name, dependencies);
+    }
+
+    /// On the selected fork, runs `deployStep` unless code is already at `expectedAddress`, then refuses any code
+    /// there whose hash is not `expectedCodeHash`.
+    /// @param vm The Vm instance to broadcast with.
+    /// @param network The network being deployed to, for a refusal to name.
+    /// @param deployer The address to broadcast as.
+    /// @param deployStep Puts code at the expected address on the selected fork.
+    /// @param deployStepData The step data.
+    /// @param expectedAddress The address the step MUST deploy to.
+    /// @param expectedCodeHash The code hash expected at `expectedAddress`.
+    function deployStepToSelectedFork(
+        Vm vm,
+        string memory network,
+        address deployer,
+        function(Vm, string memory, address, bytes memory) internal returns (address) deployStep,
+        bytes memory deployStepData,
+        address expectedAddress,
+        bytes32 expectedCodeHash
+    ) internal {
+        if (expectedAddress.code.length == 0) {
+            address stepDeployedAddress = deployStep(vm, network, deployer, deployStepData);
+            if (stepDeployedAddress != expectedAddress) {
+                revert UnexpectedDeployedAddress(expectedAddress, stepDeployedAddress);
+            }
+        } else {
+            console2.log(" - Code already exists at expected address, skipping deployment");
+        }
+        console2.log(" - Final Address:", expectedAddress);
+        checkDeployedCode(network, expectedAddress, expectedCodeHash);
+    }
+
+    /// The one per-network loop for every mechanism.
+    /// @param vm The Vm instance to fork and broadcast with.
+    /// @param networks The networks, as catalogue entries.
+    /// @param deployer The address to broadcast as.
+    /// @param deployStep Puts code at the expected address on the selected fork.
+    /// @param deploys The per-network step data, expected and derived addresses.
+    /// @param expectedCodeHash The code hash expected on every network.
+    /// @param dependencies Checked on every network, deployed or not.
+    /// @return The fork of each network.
+    function deployStepToNetworks(
+        Vm vm,
+        SupportedNetwork[] memory networks,
+        address deployer,
+        function(Vm, string memory, address, bytes memory) internal returns (address) deployStep,
+        NetworkDeploys memory deploys,
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
+    ) internal returns (uint256[] memory) {
+        checkNetworkDeploys(networks, deploys);
         uint256[] memory forkIds = createForks(vm, networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
-            vm.selectFork(forkIds[i]);
-            console2.log("Deploying to network:", networks[i].name);
-            console2.log("Block number:", block.number);
-            checkNetworkChainId(networks[i]);
-            checkDeclaredDependencies(networks[i].name, dependencies);
-
-            address expectedAddress = deploys.expectedAddresses[i];
-            if (expectedAddress.code.length == 0) {
-                address stepDeployedAddress = deployStep(vm, networks[i].name, deployer, deploys.deployStepData[i]);
-                if (stepDeployedAddress != expectedAddress) {
-                    revert UnexpectedDeployedAddress(expectedAddress, stepDeployedAddress);
-                }
-            } else {
-                console2.log(" - Code already exists at expected address, skipping deployment");
-            }
-            console2.log(" - Final Address:", expectedAddress);
-            checkDeployedCode(networks[i].name, expectedAddress, expectedCodeHash);
+            selectCheckedFork(vm, networks[i], forkIds[i], dependencies);
+            deployStepToSelectedFork(
+                vm,
+                networks[i].name,
+                deployer,
+                deployStep,
+                deploys.deployStepData[i],
+                deploys.expectedAddresses[i],
+                expectedCodeHash
+            );
         }
         return forkIds;
     }
