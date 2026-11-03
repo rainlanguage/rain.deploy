@@ -27,10 +27,10 @@ contract LibRainDeployCheckNetworkDeploysTest is Test {
             derivedAddresses: new address[](derivedLength)
         });
         for (uint256 i = 0; i < expectedLength; i++) {
-            deploys.expectedAddresses[i] = address(uint160(0x1000 + i));
+            deploys.expectedAddresses[i] = vm.addr(0x1000 + i);
         }
         for (uint256 i = 0; i < derivedLength; i++) {
-            deploys.derivedAddresses[i] = address(uint160(0x2000 + i));
+            deploys.derivedAddresses[i] = vm.addr(0x2000 + i);
         }
         return deploys;
     }
@@ -90,7 +90,7 @@ contract LibRainDeployCheckNetworkDeploysTest is Test {
         index = bound(index, 0, length - 1);
         NetworkDeploys memory deploys = pairedLists(length);
         for (uint256 i = index; i < length; i++) {
-            deploys.derivedAddresses[i] = address(uint160(0x2000 + i));
+            deploys.derivedAddresses[i] = vm.addr(0x2000 + i);
         }
         vm.expectRevert(
             abi.encodeWithSelector(
