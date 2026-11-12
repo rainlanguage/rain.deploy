@@ -265,10 +265,41 @@ contract LibConfigRegistryRegisterTest is Test {
         this.externalCheckSender(sender, authority);
     }
 
-    /// The authority passes, whichever account it is, without reading the
-    /// registry: there is none here, and any read of it would revert.
-    function testSenderIsAuthority(address authority) external view {
+    /// The authority passes, whichever nonzero account it is, with nothing
+    /// approved.
+    function testSenderIsAuthority(address authority) external {
+        vm.assume(authority != address(0));
+        deployRegistry();
         this.externalCheckSender(authority, authority);
+    }
+
+    /// The zero address as both sender and authority is refused by the
+    /// registry's own `ZeroDelegate`: the registry is asked even when the
+    /// sender is the authority.
+    function testSenderIsZeroAuthorityIsRefused() external {
+        deployRegistry();
+        vm.expectRevert(IRegistryDelegatesV3.ZeroDelegate.selector);
+        this.externalCheckSender(address(0), address(0));
+    }
+
+    /// A delegate the authority approved unscoped on the selected chain
+    /// passes, and is refused again once revoked.
+    function testSenderIsUnscopedDelegate(address sender) external {
+        vm.assume(sender != AUTHORITY && sender != address(0));
+        IConfigRegistryV5 registry = deployRegistry();
+        vm.prank(AUTHORITY);
+        registry.approveUnscopedV5(sender);
+        assertFalse(registry.approvedV5(AUTHORITY, NAME, sender));
+        this.externalCheckSender(sender, AUTHORITY);
+
+        vm.prank(AUTHORITY);
+        registry.revokeUnscopedV5(sender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
+        );
+        this.externalCheckSender(sender, AUTHORITY);
     }
 
     /// A delegate the authority approved on the selected chain passes, and is
@@ -708,6 +739,7 @@ contract LibConfigRegistryRegisterTest is Test {
         assumeNotPrecompile(sender);
         assumeNotForgeAddress(sender);
         vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(0));
         vm.assume(sender != address(this));
         IConfigRegistryV5 registry = deployRegistry();
         bytes32 name = keccak256("a");

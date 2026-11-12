@@ -6,8 +6,23 @@ import {IRegistryDelegatesV3} from "../interface/IRegistryDelegatesV3.sol";
 
 /// @title LibRegistryDelegates
 /// @notice The calldata of `IRegistryDelegatesV3`, which every registry
-/// implements identically.
+/// implements identically, and the write check it enforces.
 library LibRegistryDelegates {
+    /// `checkWrite`'s predicate: `delegate` is `account`, or approved for `scope` or unscoped.
+    /// @param registry The registry asked.
+    /// @param account The account written under.
+    /// @param scope The scope written in.
+    /// @param delegate The account that would write.
+    /// @return True when `registry` lets `delegate` write.
+    function approved(IRegistryDelegatesV3 registry, address account, bytes32 scope, address delegate)
+        internal
+        view
+        returns (bool)
+    {
+        return registry.approvedV5(account, scope, delegate) || registry.approvedUnscopedV5(account, delegate)
+            || delegate == account;
+    }
+
     /// @param scope The scope under the sending account.
     /// @param delegate The delegate.
     /// @param approve True for `approveV5`, false for `revokeV5`.

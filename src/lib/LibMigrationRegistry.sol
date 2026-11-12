@@ -442,17 +442,22 @@ library LibMigrationRegistry {
         return (to, data);
     }
 
-    /// Whether `writer` has approved `delegate` to write its line in
-    /// `namespace`. Verifies the registry's code hash first, for the reason
-    /// `appliedV5` does: occupying code could answer anything.
+    /// Whether `delegate` may write `writer`'s line in `namespace`: it is
+    /// `writer`, or `writer` approved it for `namespace` or unscoped. Verifies
+    /// the registry's code hash first, for the reason `appliedV5` does:
+    /// occupying code could answer anything.
     /// @param writer The line's writer. Never the zero address.
     /// @param namespace The line under `writer`. Never zero.
     /// @param delegate The account asked about. Never the zero address.
-    /// @return True when approved.
+    /// @return True when `delegate` may write.
     function approvedV5(address writer, bytes32 namespace, address delegate) internal view returns (bool) {
         checkCodeHash();
-        return IMigrationRegistryV5(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .approvedV5(writer, namespace, delegate);
+        return LibRegistryDelegates.approved(
+            IMigrationRegistryV5(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS),
+            writer,
+            namespace,
+            delegate
+        );
     }
 
     /// Which account wrote `writer`'s record of `migration` in `namespace`:
