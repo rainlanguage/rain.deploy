@@ -9,6 +9,7 @@ import {IConfigRegistryV5} from "../interface/IConfigRegistryV5.sol";
 import {LibConfigRegistry} from "./LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
+import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
 
 /// @dev One bind's inputs, as an authority writes them.
 struct ConfigBinding {
@@ -233,7 +234,7 @@ library LibConfigRegistryRegister {
     }
 
     /// Reverts `SenderNotApproved` unless `sender` is `authority` or approved
-    /// by it for `name` in the selected chain's registry.
+    /// by it for `name` or unscoped in the selected chain's registry.
     /// @param network The catalogue entry of the selected chain.
     /// @param sender The account that would sign.
     /// @param authority The authority the run binds under.
@@ -242,11 +243,9 @@ library LibConfigRegistryRegister {
         internal
         view
     {
-        if (
-            sender != authority
-                && !IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                    .approvedV5(authority, name, sender)
-        ) {
+        if (!LibRegistryDelegates.approved(
+                IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), authority, name, sender
+            )) {
             revert SenderNotApproved(network.name, sender, authority, name);
         }
     }
