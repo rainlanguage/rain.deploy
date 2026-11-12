@@ -19,8 +19,8 @@ library LibRegistryDelegates {
         view
         returns (bool)
     {
-        return delegate == account || registry.approvedV5(account, scope, delegate)
-            || registry.approvedUnscopedV5(account, delegate);
+        return registry.approvedV5(account, scope, delegate) || registry.approvedUnscopedV5(account, delegate)
+            || delegate == account;
     }
 
     /// @param scope The scope under the sending account.
