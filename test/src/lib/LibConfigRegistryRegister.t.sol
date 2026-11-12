@@ -739,6 +739,7 @@ contract LibConfigRegistryRegisterTest is Test {
         assumeNotPrecompile(sender);
         assumeNotForgeAddress(sender);
         vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(0));
         vm.assume(sender != address(this));
         IConfigRegistryV5 registry = deployRegistry();
         bytes32 name = keccak256("a");
