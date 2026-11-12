@@ -66,6 +66,10 @@ contract LibMigrationRegistryDelegateTest is Test {
         return LibMigrationRegistry.approvedV5(WRITER, NAMESPACE, DELEGATE);
     }
 
+    function externalApprovedOf(address writer, bytes32 namespace, address delegate) external view returns (bool) {
+        return LibMigrationRegistry.approvedV5(writer, namespace, delegate);
+    }
+
     function externalAppliedBy() external view returns (address) {
         return LibMigrationRegistry.appliedByV5(WRITER, NAMESPACE, MIGRATION);
     }
@@ -163,7 +167,8 @@ contract LibMigrationRegistryDelegateTest is Test {
         assertEq(LibMigrationRegistry.headV5(address(this), NAMESPACE), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The approval builders and the read refuse a chain with no registry.
+    /// The approval builders and the read refuse a chain with no registry,
+    /// the writer asking about itself included.
     function testNoRegistryIsRefused() external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         expectCodeHash(bytes32(0));
@@ -172,6 +177,56 @@ contract LibMigrationRegistryDelegateTest is Test {
         this.externalRevokeCall();
         expectCodeHash(bytes32(0));
         this.externalApproved();
+        expectCodeHash(bytes32(0));
+        this.externalApprovedOf(WRITER, NAMESPACE, WRITER);
+    }
+
+    /// Other code at the registry address is refused by its hash, the writer
+    /// asking about itself included.
+    function testApprovedWrongCodeIsRefusedForTheWriterItself(bytes memory code) external {
+        vm.assume(code.length > 0 && code[0] != 0xef);
+        vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+        expectCodeHash(keccak256(code));
+        this.externalApprovedOf(WRITER, NAMESPACE, WRITER);
+    }
+
+    /// The writer may write its own line with nothing approved.
+    function testApprovedWriterItself() external {
+        deployRegistry();
+        assertTrue(LibMigrationRegistry.approvedV5(WRITER, NAMESPACE, WRITER));
+        assertFalse(LibMigrationRegistry.approvedV5(WRITER, NAMESPACE, DELEGATE));
+    }
+
+    /// A delegate the writer approved unscoped may write every namespace of
+    /// its lines, until revoked.
+    function testApprovedUnscopedDelegate() external {
+        deployRegistry();
+        address registry = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
+        send(WRITER, registry, abi.encodeCall(IRegistryDelegatesV3.approveUnscopedV5, (DELEGATE)));
+        assertTrue(LibMigrationRegistry.approvedV5(WRITER, NAMESPACE, DELEGATE));
+        assertTrue(LibMigrationRegistry.approvedV5(WRITER, SECOND, DELEGATE));
+        assertFalse(LibMigrationRegistry.approvedV5(DELEGATE, NAMESPACE, WRITER));
+
+        send(WRITER, registry, abi.encodeCall(IRegistryDelegatesV3.revokeUnscopedV5, (DELEGATE)));
+        assertFalse(LibMigrationRegistry.approvedV5(WRITER, NAMESPACE, DELEGATE));
+    }
+
+    /// The zero writer, the zero namespace and the zero delegate are each
+    /// refused with the registry's own error, the writer asking about itself
+    /// included.
+    function testApprovedZeroKeysAreRefused() external {
+        deployRegistry();
+        vm.expectRevert(IMigrationRegistryV5.ZeroWriter.selector);
+        this.externalApprovedOf(address(0), NAMESPACE, DELEGATE);
+        vm.expectRevert(IMigrationRegistryV5.ZeroWriter.selector);
+        this.externalApprovedOf(address(0), NAMESPACE, address(0));
+        vm.expectRevert(IMigrationRegistryV5.ZeroNamespace.selector);
+        this.externalApprovedOf(WRITER, bytes32(0), DELEGATE);
+        vm.expectRevert(IMigrationRegistryV5.ZeroNamespace.selector);
+        this.externalApprovedOf(WRITER, bytes32(0), WRITER);
+        vm.expectRevert(IRegistryDelegatesV3.ZeroDelegate.selector);
+        this.externalApprovedOf(WRITER, NAMESPACE, address(0));
     }
 
     /// The direct approve and revoke, made from a contract, approve and revoke
