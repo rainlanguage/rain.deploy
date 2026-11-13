@@ -314,26 +314,37 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
         return deployed.code;
     }
 
-    /// The retired `AddressRegistry` releases are required only on the networks they were live on at retirement;
-    /// every other suite on every declared network.
-    function testAddressRegistryReleasesAreRequiredOnlyWhereTheyWereLive() external pure {
+    /// The retired `AddressRegistry` releases are required only on the networks they were live on at retirement,
+    /// the other releases cut before `zerog` joined only on the networks before it, and every other suite on every
+    /// declared network.
+    function testReleasesAreRequiredOnlyWhereTheyWereCutFor() external pure {
         DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
         string[] memory live = addressRegistryNetworks();
+        string[] memory before = networksBeforeZerog();
         uint256 retired = 0;
+        uint256 beforeZerog = 0;
         for (uint256 i = 0; i < suites.length; i++) {
             bool isRetired = keccak256(bytes(suiteKeyName(suites[i].suite))) == keccak256(bytes(ADDRESS_REGISTRY_SUITE));
+            bool isBeforeZerog = !isRetired && releasedBeforeZerog(suites[i].suite);
             if (isRetired) {
                 retired++;
                 assertEq(keccak256(abi.encode(suites[i].networks)), keccak256(abi.encode(live)), suites[i].suite);
+            } else if (isBeforeZerog) {
+                beforeZerog++;
+                assertEq(keccak256(abi.encode(suites[i].networks)), keccak256(abi.encode(before)), suites[i].suite);
             } else {
                 assertEq(keccak256(abi.encode(suites[i].networks)), keccak256(abi.encode(d.networks)), suites[i].suite);
             }
             for (uint256 j = 0; j < d.networks.length; j++) {
-                assertEq(requiresSuiteOn(suites[i], d.networks[j]), !isRetired || isListed(live, d.networks[j]));
+                bool expected =
+                    isRetired ? isListed(live, d.networks[j]) : !isBeforeZerog || isListed(before, d.networks[j]);
+                assertEq(requiresSuiteOn(suites[i], d.networks[j]), expected);
             }
         }
         assertGt(retired, 0, "no AddressRegistry release declared");
+        assertGt(beforeZerog, 0, "no release before zerog declared");
+        assertFalse(requiresSuiteOn(suiteByName(d, "config-registry@0_1_30"), LibRainDeploy.ZEROG));
     }
 
     function isListed(string[] memory networks, string memory network) internal pure returns (bool) {
