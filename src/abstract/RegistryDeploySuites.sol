@@ -81,8 +81,8 @@ struct ParameterisedContract {
 /// emits it from the frozen record. Nothing about a release is written here.
 abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// This repo's declaration: every Rain network, Zoltu, the generated releases with each `AddressRegistry`
-    /// release required only on `addressRegistryNetworks()`, `registryCandidates()` and `parameterisedContractNames()` as
-    /// the frozen code records.
+    /// release and each release up to `LAST_RELEASE_BEFORE_ZEROG` required only on `networksBeforeZerog()`,
+    /// `registryCandidates()` and `parameterisedContractNames()` as the frozen code records.
     /// @return The declaration.
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory declared;
@@ -97,11 +97,22 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// The suite key of the retired `AddressRegistry` releases.
     string constant ADDRESS_REGISTRY_SUITE = "address-registry";
 
+    /// The newest release cut before `zerog` joined the roster.
+    string constant LAST_RELEASE_BEFORE_ZEROG = "0_1_30";
+
     /// The networks the `AddressRegistry` releases were live on when it was
     /// retired. Frozen: no candidate carries its bytecode, so nothing can
     /// deploy it to a network added since.
     /// @return The network names.
     function addressRegistryNetworks() internal pure returns (string[] memory) {
+        return networksBeforeZerog();
+    }
+
+    /// The roster every release up to `LAST_RELEASE_BEFORE_ZEROG` was cut and
+    /// deployed for. Frozen: those releases are not on 0G, so only the
+    /// candidates and the releases cut after `zerog` joined are required there.
+    /// @return The network names.
+    function networksBeforeZerog() internal pure returns (string[] memory) {
         string[] memory networks = new string[](9);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.BASE;
@@ -132,15 +143,70 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// libs written from the generated list.
     ///
     /// The rolling `candidate/` snapshots are not releases.
-    /// @return The releases, each `AddressRegistry` one declaring `addressRegistryNetworks()`.
+    /// @return The releases, narrowed by `narrowReleasedNetworks`.
     function registryReleasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = LibReleasedSuites.releasedSuites();
+        return narrowReleasedNetworks(LibReleasedSuites.releasedSuites());
+    }
+
+    /// Sets each `AddressRegistry` release to `addressRegistryNetworks()` and
+    /// each other release up to `LAST_RELEASE_BEFORE_ZEROG` to
+    /// `networksBeforeZerog()`, leaving later releases to the declaration's
+    /// networks.
+    /// @param released The releases, mutated.
+    /// @return `released`.
+    function narrowReleasedNetworks(DeploySuite[] memory released) internal pure returns (DeploySuite[] memory) {
         for (uint256 i = 0; i < released.length; i++) {
             if (keccak256(bytes(suiteKeyName(released[i].suite))) == keccak256(bytes(ADDRESS_REGISTRY_SUITE))) {
                 released[i].networks = addressRegistryNetworks();
+            } else if (releasedBeforeZerog(released[i].suite)) {
+                released[i].networks = networksBeforeZerog();
             }
         }
         return released;
+    }
+
+    /// Whether a suite key's `<major>_<minor>_<patch>` tag is at or before
+    /// `LAST_RELEASE_BEFORE_ZEROG`. A key with no tag is not.
+    /// @param suite The suite key.
+    /// @return True if the release was cut before `zerog` joined the roster.
+    function releasedBeforeZerog(string memory suite) internal pure returns (bool) {
+        bytes memory key = bytes(suite);
+        uint256 start = key.length;
+        for (uint256 i = 0; i < key.length; i++) {
+            if (key[i] == "@") {
+                start = i + 1;
+                break;
+            }
+        }
+        if (start == key.length) {
+            return false;
+        }
+        bytes memory tag = new bytes(key.length - start);
+        for (uint256 i = 0; i < tag.length; i++) {
+            tag[i] = key[start + i];
+        }
+        uint256[3] memory version = tagVersion(tag);
+        uint256[3] memory cutoff = tagVersion(bytes(LAST_RELEASE_BEFORE_ZEROG));
+        for (uint256 i = 0; i < 3; i++) {
+            if (version[i] != cutoff[i]) {
+                return version[i] < cutoff[i];
+            }
+        }
+        return true;
+    }
+
+    /// The three numbers of a `<major>_<minor>_<patch>` tag.
+    /// @param tag The tag, e.g. `0_1_30`.
+    /// @return version The major, minor and patch numbers.
+    function tagVersion(bytes memory tag) internal pure returns (uint256[3] memory version) {
+        uint256 component = 0;
+        for (uint256 i = 0; i < tag.length; i++) {
+            if (tag[i] == "_") {
+                component++;
+            } else {
+                version[component] = version[component] * 10 + (uint8(tag[i]) - 0x30);
+            }
+        }
     }
 
     /// One entry per contract this repo deploys. A third deployed contract

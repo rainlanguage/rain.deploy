@@ -246,6 +246,13 @@ library LibRainDeploy {
     /// as on every other supported network.
     string constant ROBINHOOD = "robinhood";
 
+    /// Config name for 0G mainnet (chain id 16661). Spelled `zerog` because a
+    /// name starting with a digit cannot be the `ZEROG_RPC_URL` env var the
+    /// alias maps to. The Zoltu factory is deployed there with the canonical
+    /// runtime, so deterministic deploys land at the same addresses as on every
+    /// other supported network.
+    string constant ZEROG = "zerog";
+
     /// Etches the Zoltu factory bytecode into the factory address. Useful for
     /// networks where the factory is not yet deployed.
     /// @param vm The Vm instance to use for etching.
@@ -365,7 +372,7 @@ library LibRainDeploy {
     /// notice reads the same file.
     /// @return The supported networks.
     function supportedNetworkConfigs() internal pure returns (SupportedNetwork[] memory) {
-        SupportedNetwork[] memory networks = new SupportedNetwork[](9);
+        SupportedNetwork[] memory networks = new SupportedNetwork[](10);
         networks[0] = SupportedNetwork({
             name: ARBITRUM_ONE, chainId: 42161, explorerUrl: "", defaultRpcUrl: "https://arb1.arbitrum.io/rpc"
         });
@@ -401,6 +408,18 @@ library LibRainDeploy {
             chainId: 4663,
             explorerUrl: "https://robinhoodchain.blockscout.com/api",
             defaultRpcUrl: "https://rpc.mainnet.chain.robinhood.com"
+        });
+        // 0G is not indexed by Etherscan V2, so `--verify` is pointed at its
+        // chainscan explorer, which speaks the Etherscan API and ignores the
+        // key. forge still needs a non-empty key or it drops the entry, so CI
+        // passes `PLACEHOLDER`.
+        // Sourcify also supports 16661 as a fallback:
+        // `forge verify-contract --verifier sourcify --chain 16661 ...`.
+        networks[9] = SupportedNetwork({
+            name: ZEROG,
+            chainId: 16661,
+            explorerUrl: "https://chainscan.0g.ai/open/api",
+            defaultRpcUrl: "https://evmrpc.0g.ai"
         });
         return networks;
     }

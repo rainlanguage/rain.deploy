@@ -69,11 +69,11 @@ contract LibRainDeployTest is Test {
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
     }
 
-    /// `supportedNetworks` MUST return exactly 9 networks in the expected
+    /// `supportedNetworks` MUST return exactly 10 networks in the expected
     /// order matching the library constants.
     function testSupportedNetworks() external pure {
         string[] memory networks = LibRainDeploy.supportedNetworks();
-        assertEq(networks.length, 9);
+        assertEq(networks.length, 10);
         assertEq(networks[0], LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1], LibRainDeploy.BASE);
         assertEq(networks[2], LibRainDeploy.BASE_SEPOLIA);
@@ -83,6 +83,7 @@ contract LibRainDeployTest is Test {
         assertEq(networks[6], LibRainDeploy.HYPEREVM);
         assertEq(networks[7], LibRainDeploy.POLYGON);
         assertEq(networks[8], LibRainDeploy.ROBINHOOD);
+        assertEq(networks[9], LibRainDeploy.ZEROG);
     }
 
     /// `supportedNetworks` MUST be the names of `supportedNetworkConfigs`, in
@@ -164,12 +165,12 @@ contract LibRainDeployTest is Test {
     /// Every roster entry MUST state the chain id its network really has.
     ///
     /// Spelled out here rather than looped, because a loop over the roster
-    /// comparing it to itself asserts nothing. These nine numbers came from
+    /// comparing it to itself asserts nothing. These ten numbers came from
     /// `cast chain-id` against the endpoints `.env.example` binds, and they are
     /// what `--verify` submits as `chain`.
     function testSupportedNetworkChainIds() external pure {
         SupportedNetwork[] memory configs = LibRainDeploy.supportedNetworkConfigs();
-        assertEq(configs.length, 9);
+        assertEq(configs.length, 10);
         assertEq(configs[0].chainId, 42161);
         assertEq(configs[1].chainId, 8453);
         assertEq(configs[2].chainId, 84532);
@@ -179,6 +180,7 @@ contract LibRainDeployTest is Test {
         assertEq(configs[6].chainId, 999);
         assertEq(configs[7].chainId, 137);
         assertEq(configs[8].chainId, 4663);
+        assertEq(configs[9].chainId, 16661);
     }
 
     /// `networkChainIds` gives each network's chain id in the networks' order, repeats included, and none for none.
@@ -196,8 +198,8 @@ contract LibRainDeployTest is Test {
         assertEq(LibRainDeploy.networkChainIds(new SupportedNetwork[](0)).length, 0);
     }
 
-    /// Only Robinhood Chain states an explorer url, because it is the only
-    /// supported network Etherscan V2 does not index.
+    /// Only Robinhood Chain and 0G state an explorer url, each pointing
+    /// `--verify` at the chain's own explorer instead of Etherscan V2.
     ///
     /// A url stated on a network Etherscan does index would point `--verify` at
     /// that url instead, silently, for that network alone.
@@ -206,6 +208,8 @@ contract LibRainDeployTest is Test {
         for (uint256 i = 0; i < configs.length; i++) {
             if (keccak256(bytes(configs[i].name)) == keccak256(bytes(LibRainDeploy.ROBINHOOD))) {
                 assertEq(configs[i].explorerUrl, "https://robinhoodchain.blockscout.com/api");
+            } else if (keccak256(bytes(configs[i].name)) == keccak256(bytes(LibRainDeploy.ZEROG))) {
+                assertEq(configs[i].explorerUrl, "https://chainscan.0g.ai/open/api");
             } else {
                 assertEq(configs[i].explorerUrl, "", configs[i].name);
             }

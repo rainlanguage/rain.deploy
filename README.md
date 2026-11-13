@@ -1244,7 +1244,10 @@ An `[etherscan]` entry is generated for every network in that set, from the
 catalogue's own facts. Whether a network HAS an Etherscan deployment is one of
 them rather than anything about the repo — Robinhood (4663) is not indexed by
 Etherscan v2, so its entry carries its Blockscout url and the deployment is
-verified through Sourcify.
+verified through Sourcify. 0G (16661) has no Etherscan v2 support and no
+forge-known explorer, so its entry carries its chainscan url, which speaks the
+Etherscan API and ignores the key (forge still needs a non-empty one, so CI
+passes `PLACEHOLDER`).
 
 ### Upgrading from 0.1.18
 
