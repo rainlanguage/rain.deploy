@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {LibAffix} from "rain-string-0.3.10/src/lib/affix/LibAffix.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {
     LibCodeGen,
@@ -1376,8 +1377,8 @@ library LibRainDeploySnapshot {
         uint256 perNetwork = 0;
         bool everyNetwork = false;
         for (uint256 i = 0; i < lines.length; i++) {
-            bool isEveryNetwork = startsWith(lines[i], DEPLOYED_ADDRESS_DECLARATION);
-            if (!isEveryNetwork && !startsWith(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX)) {
+            bool isEveryNetwork = LibAffix.startsWith(lines[i], DEPLOYED_ADDRESS_DECLARATION);
+            if (!isEveryNetwork && !LibAffix.startsWith(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX)) {
                 if (vm.contains(lines[i], DEPLOYED_ADDRESS_NAME)) {
                     revert FrozenSnapshotUnreadable(path);
                 }
@@ -1448,7 +1449,7 @@ library LibRainDeploySnapshot {
         string[] memory tokens = vm.split(lines[line], " ");
         bool readable = tokens.length >= 4 && keccak256(bytes(tokens[3])) == keccak256("=");
         if (readable && tokens.length == 4) {
-            readable = line + 1 < lines.length && vm.indexOf(lines[line + 1], wrappedPrefix) == 0;
+            readable = line + 1 < lines.length && LibAffix.startsWith(lines[line + 1], wrappedPrefix);
             if (readable) {
                 tokens = vm.split(lines[line + 1], " ");
             }
@@ -1542,18 +1543,6 @@ library LibRainDeploySnapshot {
             || vm.contains(record, "\xe2\x80\xa9");
     }
 
-    /// Whether `text` starts with `prefix`, without the copy a cheatcode call makes.
-    function startsWith(string memory text, string memory prefix) internal pure returns (bool) {
-        bool result = false;
-        assembly ("memory-safe") {
-            let n := mload(prefix)
-            if iszero(gt(n, mload(text))) {
-                result := eq(keccak256(add(text, 0x20), n), keccak256(add(prefix, 0x20), n))
-            }
-        }
-        return result;
-    }
-
     /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes
     /// a block comment, a `//` comment runs to the next `\n`, and a quoted string runs to its unescaped closing quote.
     /// @param record The record file's contents.
@@ -1634,7 +1623,7 @@ library LibRainDeploySnapshot {
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (startsWith(lines[i], MECHANISM_DATA_DECLARATION)) {
+            if (LibAffix.startsWith(lines[i], MECHANISM_DATA_DECLARATION)) {
                 mechanismData++;
             } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
@@ -1666,7 +1655,7 @@ library LibRainDeploySnapshot {
     function recordedDescribedByMeta(Vm vm, string memory path, string[] memory lines) internal pure returns (bool) {
         uint256 declarations = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (startsWith(lines[i], DESCRIBED_BY_META_DECLARATION)) {
+            if (LibAffix.startsWith(lines[i], DESCRIBED_BY_META_DECLARATION)) {
                 declarations++;
             } else if (vm.contains(lines[i], DESCRIBED_BY_META_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
@@ -1762,12 +1751,12 @@ library LibRainDeploySnapshot {
         returns (bytes32)
     {
         uint256 line = 0;
-        while (!startsWith(lines[line], MECHANISM_DATA_DECLARATION)) {
+        while (!LibAffix.startsWith(lines[line], MECHANISM_DATA_DECLARATION)) {
             line++;
         }
         (, string memory value) = declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "hex\""));
         bytes memory literal = bytes(value);
-        if (literal.length < 70 || vm.indexOf(value, "hex\"") != 0) {
+        if (literal.length < 70 || !LibAffix.startsWith(value, "hex\"")) {
             revert FrozenSnapshotUnreadable(path);
         }
         bytes memory word = new bytes(66);
