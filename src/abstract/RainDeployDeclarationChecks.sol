@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {LibDataContract, PREFIX_BYTES_LENGTH} from "rain-datacontract-0.2.1/src/lib/LibDataContract.sol";
 
 import {
     DeployCandidate,
@@ -277,9 +278,27 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// @param suite The suite.
     /// @param needle The address.
-    /// @return Whether the suite's creation code or mechanism data embeds it.
+    /// @return Whether the suite's creation code or mechanism data embeds it. A data contract's creation code only
+    /// returns its data, so it embeds nothing.
     function embeds(DeploySuite memory suite, address needle) internal pure returns (bool) {
-        return containsAddress(suite.creationCode, needle) || containsAddress(suite.mechanismData, needle);
+        return (!isDataContract(suite.creationCode) && containsAddress(suite.creationCode, needle))
+            || containsAddress(suite.mechanismData, needle);
+    }
+
+    /// @param creationCode A suite's creation code.
+    /// @return Whether it is `LibDataContract.contractCreationCode` of the bytes after its prefix.
+    function isDataContract(bytes memory creationCode) internal pure returns (bool) {
+        if (
+            creationCode.length < PREFIX_BYTES_LENGTH
+                || creationCode.length - PREFIX_BYTES_LENGTH >= uint256(type(uint16).max)
+        ) {
+            return false;
+        }
+        bytes memory data = new bytes(creationCode.length - PREFIX_BYTES_LENGTH);
+        for (uint256 i = 0; i < data.length; i++) {
+            data[i] = creationCode[PREFIX_BYTES_LENGTH + i];
+        }
+        return keccak256(LibDataContract.contractCreationCode(data)) == keccak256(creationCode);
     }
 
     /// @param deps A dependency list.
