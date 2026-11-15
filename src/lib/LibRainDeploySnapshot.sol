@@ -1376,9 +1376,9 @@ library LibRainDeploySnapshot {
         uint256 perNetwork = 0;
         bool everyNetwork = false;
         for (uint256 i = 0; i < lines.length; i++) {
-            bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
-            if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
-                if (vm.contains(lines[i], DEPLOYED_ADDRESS_NAME)) {
+            bool isEveryNetwork = startsWith(lines[i], DEPLOYED_ADDRESS_DECLARATION);
+            if (!isEveryNetwork && !startsWith(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX)) {
+                if (hasSubstring(lines[i], DEPLOYED_ADDRESS_NAME)) {
                     revert FrozenSnapshotUnreadable(path);
                 }
                 continue;
@@ -1533,13 +1533,71 @@ library LibRainDeploySnapshot {
     }
 
     /// Whether a record holds a line break solc honours other than `\n`: `\r`, `\x0b`, `\x0c`, NEL, LS or PS.
-    /// @param vm The Vm instance for string operations.
     /// @param record The record file's contents.
     /// @return Whether it holds one.
-    function hasForeignLineBreak(Vm vm, string memory record) internal pure returns (bool) {
-        return vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c")
-            || vm.contains(record, "\xc2\x85") || vm.contains(record, "\xe2\x80\xa8")
-            || vm.contains(record, "\xe2\x80\xa9");
+    function hasForeignLineBreak(Vm, string memory record) internal pure returns (bool) {
+        bool found = false;
+        assembly ("memory-safe") {
+            let cursor := add(record, 0x20)
+            let end := add(cursor, mload(record))
+            for {} lt(cursor, end) { cursor := add(cursor, 1) } {
+                let w := mload(cursor)
+                let b := byte(0, w)
+                if or(eq(b, 0x0d), or(eq(b, 0x0b), eq(b, 0x0c))) {
+                    found := 1
+                    break
+                }
+                if and(eq(b, 0xc2), lt(add(cursor, 1), end)) {
+                    if eq(byte(1, w), 0x85) {
+                        found := 1
+                        break
+                    }
+                }
+                if and(eq(b, 0xe2), lt(add(cursor, 2), end)) {
+                    if and(eq(byte(1, w), 0x80), or(eq(byte(2, w), 0xa8), eq(byte(2, w), 0xa9))) {
+                        found := 1
+                        break
+                    }
+                }
+            }
+        }
+        return found;
+    }
+
+    /// Whether `text` starts with `prefix`, without the copy a cheatcode call makes.
+    function startsWith(string memory text, string memory prefix) internal pure returns (bool) {
+        bool result = false;
+        assembly ("memory-safe") {
+            let n := mload(prefix)
+            if iszero(gt(n, mload(text))) {
+                result := eq(keccak256(add(text, 0x20), n), keccak256(add(prefix, 0x20), n))
+            }
+        }
+        return result;
+    }
+
+    /// Whether `text` contains `needle`, without the copy a cheatcode call makes.
+    function hasSubstring(string memory text, string memory needle) internal pure returns (bool) {
+        bool found = false;
+        assembly ("memory-safe") {
+            let n := mload(needle)
+            let len := mload(text)
+            if iszero(gt(n, len)) {
+                let needleHash := keccak256(add(needle, 0x20), n)
+                let first := byte(0, mload(add(needle, 0x20)))
+                let cursor := add(text, 0x20)
+                let last := add(cursor, sub(len, n))
+                for {} iszero(gt(cursor, last)) { cursor := add(cursor, 1) } {
+                    if eq(byte(0, mload(cursor)), first) {
+                        if eq(keccak256(cursor, n), needleHash) {
+                            found := 1
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        return found;
     }
 
     /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes
@@ -1622,9 +1680,9 @@ library LibRainDeploySnapshot {
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
+            if (startsWith(lines[i], MECHANISM_DATA_DECLARATION)) {
                 mechanismData++;
-            } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
+            } else if (hasSubstring(lines[i], MECHANISM_DATA_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
             }
         }
@@ -1654,9 +1712,9 @@ library LibRainDeploySnapshot {
     function recordedDescribedByMeta(Vm vm, string memory path, string[] memory lines) internal pure returns (bool) {
         uint256 declarations = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], DESCRIBED_BY_META_DECLARATION) == 0) {
+            if (startsWith(lines[i], DESCRIBED_BY_META_DECLARATION)) {
                 declarations++;
-            } else if (vm.contains(lines[i], DESCRIBED_BY_META_NAME)) {
+            } else if (hasSubstring(lines[i], DESCRIBED_BY_META_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
             }
         }
@@ -1758,7 +1816,7 @@ library LibRainDeploySnapshot {
         returns (bytes32)
     {
         uint256 line = 0;
-        while (vm.indexOf(lines[line], MECHANISM_DATA_DECLARATION) != 0) {
+        while (!startsWith(lines[line], MECHANISM_DATA_DECLARATION)) {
             line++;
         }
         (, string memory value) = declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "hex\""));
