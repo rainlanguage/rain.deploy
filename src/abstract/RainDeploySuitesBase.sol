@@ -331,7 +331,7 @@ struct DeployMechanismHandler {
         logVerification;
     function(DeployDeclaration memory, Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory)
         writeSuiteSnapshot;
-    function(DeployDeclaration memory, Vm, string memory, string memory) internal view returns (string memory)
+    function(DeployDeclaration memory, Vm, string memory, bool, string memory) internal view returns (string memory)
         releasedMechanismData;
     function(DeployDeclaration memory, string memory) internal pure returns (string memory) releasedImport;
     function(DeployDeclaration memory, Vm, string memory) internal view returns (bytes32) legacyRecordId;

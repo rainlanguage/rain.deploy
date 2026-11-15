@@ -1724,14 +1724,6 @@ library LibRainDeploySnapshot {
         return declarations == 1;
     }
 
-    /// @param vm The Vm instance for file and string operations.
-    /// @param path A record file, as `frozenSnapshotPaths` returns it.
-    /// @return Whether it declares `MECHANISM_DATA`, with `recordedMechanismShape`'s refusals.
-    function recordDeclaresMechanismData(Vm vm, string memory path) internal view returns (bool) {
-        (bool mechanismData,) = recordedMechanismShape(vm, path);
-        return mechanismData;
-    }
-
     /// The mechanism id a record declares: `ZOLTU_MECHANISM_ID` without `MECHANISM_DATA`, else its leading word when
     /// that is one of `d.mechanisms`' ids, else the one id of `d.mechanisms` whose `legacyRecordId` claims the record.
     /// Refuses `MechanismUnclaimed` for no claim, `LegacyRecordAmbiguous` for more than one, `FrozenSnapshotUnreadable`
@@ -2051,7 +2043,7 @@ library LibRainDeploySnapshot {
     ) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
         string memory mechanismData = LibRainDeployDeclaration.mechanismById(d, facts.mechanismId, path)
-            .releasedMechanismData(d, vm, path, prefix);
+            .releasedMechanismData(d, vm, path, facts.mechanismData, prefix);
         string memory storedDeployedAddress =
             facts.perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
         string memory head = string.concat(
