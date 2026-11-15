@@ -203,8 +203,9 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         returns (string memory)
     {
         DeployDeclaration memory d = declaration();
+        (bool mechanismData,) = LibRainDeploySnapshot.recordedMechanismShape(fileVm, path);
         return LibRainDeployDeclaration.mechanismById(
                 d, LibRainDeploySnapshot.recordedMechanismId(d, fileVm, path), path
-            ).releasedMechanismData(d, fileVm, path, prefix);
+            ).releasedMechanismData(d, fileVm, path, mechanismData, prefix);
     }
 }

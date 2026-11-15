@@ -397,7 +397,7 @@ library LibMockCreate2Mechanism {
         return path;
     }
 
-    function releasedMechanismData(DeployDeclaration memory, Vm, string memory, string memory prefix)
+    function releasedMechanismData(DeployDeclaration memory, Vm, string memory, bool, string memory prefix)
         internal
         pure
         returns (string memory)
