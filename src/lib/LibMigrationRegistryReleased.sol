@@ -167,6 +167,14 @@ import {
     DEPENDENCIES as MigrationRegistry_0_1_32_DEPENDENCIES
 } from "../generated/0_1_32/MigrationRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as MigrationRegistry_0_1_33_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as MigrationRegistry_0_1_33_BYTECODE_HASH,
+    CREATION_CODE as MigrationRegistry_0_1_33_CREATION_CODE,
+    RUNTIME_CODE as MigrationRegistry_0_1_33_RUNTIME_CODE,
+    DEPENDENCIES as MigrationRegistry_0_1_33_DEPENDENCIES
+} from "../generated/0_1_33/MigrationRegistry.sol";
+
 /// @title LibMigrationRegistryReleased
 /// @notice Every frozen release of `MigrationRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -187,7 +195,7 @@ library LibMigrationRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](20);
+        DeploySuite[] memory suites = new DeploySuite[](21);
         suites[0] = DeploySuite({
             suite: "migration-registry@0_1_7",
             creationCode: MigrationRegistry_0_1_7_CREATION_CODE,
@@ -424,6 +432,18 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_32_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_32_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0),
+            describedByMeta: ""
+        });
+        suites[20] = DeploySuite({
+            suite: "migration-registry@0_1_33",
+            creationCode: MigrationRegistry_0_1_33_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_33_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_33_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_33_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_33_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
             networks: new string[](0),
             describedByMeta: ""

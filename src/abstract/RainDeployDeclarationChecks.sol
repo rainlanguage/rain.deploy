@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibDataContract, PREFIX_BYTES_LENGTH} from "rain-datacontract-0.2.1/src/lib/LibDataContract.sol";
+import {LibExtrospectBytecode} from "rain-extrospection-0.1.19/src/lib/LibExtrospectBytecode.sol";
 
 import {
     DeployCandidate,
@@ -195,23 +195,23 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
         }
     }
 
-    /// Every sibling or external deployment a suite's code embeds MUST be a
-    /// declared dependency, except in a data contract's rows, and every
-    /// declared dependency MUST be embedded.
+    /// Every sibling or external deployment a suite embeds MUST be a declared
+    /// dependency, and every declared dependency MUST be embedded.
     function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal pure {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
-            bool data = isDataContract(suites[i].creationCode);
+            uint256[] memory constants =
+                LibExtrospectBytecode.scanConstantsReachableInBytecode(suites[i].creationCode);
             for (uint256 j = 0; j < suites.length; j++) {
-                checkDeclaredIfEmbedded(suites[i], data, suites[j].storedDeployedAddress);
+                checkDeclaredIfEmbedded(suites[i], constants, suites[j].storedDeployedAddress);
             }
             for (uint256 j = 0; j < externals.length; j++) {
-                checkDeclaredIfEmbedded(suites[i], data, externals[j].deployedAddress);
+                checkDeclaredIfEmbedded(suites[i], constants, externals[j].deployedAddress);
             }
             DeployDependency[] memory deps = suites[i].dependencies;
             for (uint256 j = 0; j < deps.length; j++) {
-                if (!embeds(suites[i], deps[j].deployedAddress)) {
+                if (!embeds(suites[i], constants, deps[j].deployedAddress)) {
                     revert UnreachedDependency(suites[i].suite, deps[j].deployedAddress);
                 }
             }
@@ -219,12 +219,13 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @param suite The suite.
-    /// @param data Whether its creation code is a data contract, whose rows need no declaration.
-    /// @param deployment An address the suite MUST declare if its code embeds it.
-    function checkDeclaredIfEmbedded(DeploySuite memory suite, bool data, address deployment) internal pure {
-        bool required = containsAddress(suite.mechanismData, deployment)
-            || (!data && containsAddress(suite.creationCode, deployment));
-        if (required && !declares(suite.dependencies, deployment)) {
+    /// @param constants The constants reachable in its creation code.
+    /// @param deployment An address the suite MUST declare if it embeds it.
+    function checkDeclaredIfEmbedded(DeploySuite memory suite, uint256[] memory constants, address deployment)
+        internal
+        pure
+    {
+        if (embeds(suite, constants, deployment) && !declares(suite.dependencies, deployment)) {
             revert UndeclaredDependency(suite.suite, deployment);
         }
     }
@@ -282,26 +283,21 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @param suite The suite.
+    /// @param constants The constants reachable in its creation code.
     /// @param needle The address.
-    /// @return Whether the suite's creation code or mechanism data embeds it.
-    function embeds(DeploySuite memory suite, address needle) internal pure returns (bool) {
-        return containsAddress(suite.creationCode, needle) || containsAddress(suite.mechanismData, needle);
-    }
-
-    /// @param creationCode A suite's creation code.
-    /// @return Whether it is `LibDataContract.contractCreationCode` of the bytes after its prefix.
-    function isDataContract(bytes memory creationCode) internal pure returns (bool) {
-        if (
-            creationCode.length < PREFIX_BYTES_LENGTH
-                || creationCode.length - PREFIX_BYTES_LENGTH >= uint256(type(uint16).max)
-        ) {
-            return false;
+    /// @return Whether `needle` is one of `constants` or appears in the suite's mechanism data.
+    function embeds(DeploySuite memory suite, uint256[] memory constants, address needle)
+        internal
+        pure
+        returns (bool)
+    {
+        uint256 value = uint256(uint160(needle));
+        for (uint256 i = 0; i < constants.length; i++) {
+            if (constants[i] == value) {
+                return true;
+            }
         }
-        bytes memory data = new bytes(creationCode.length - PREFIX_BYTES_LENGTH);
-        for (uint256 i = 0; i < data.length; i++) {
-            data[i] = creationCode[PREFIX_BYTES_LENGTH + i];
-        }
-        return keccak256(LibDataContract.contractCreationCode(data)) == keccak256(creationCode);
+        return containsAddress(suite.mechanismData, needle);
     }
 
     /// @param deps A dependency list.

@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {LibAffix} from "rain-string-0.3.10/src/lib/affix/LibAffix.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {
     LibCodeGen,
@@ -1376,8 +1377,8 @@ library LibRainDeploySnapshot {
         uint256 perNetwork = 0;
         bool everyNetwork = false;
         for (uint256 i = 0; i < lines.length; i++) {
-            bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
-            if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
+            bool isEveryNetwork = LibAffix.startsWith(lines[i], DEPLOYED_ADDRESS_DECLARATION);
+            if (!isEveryNetwork && !LibAffix.startsWith(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX)) {
                 if (vm.contains(lines[i], DEPLOYED_ADDRESS_NAME)) {
                     revert FrozenSnapshotUnreadable(path);
                 }
@@ -1448,7 +1449,7 @@ library LibRainDeploySnapshot {
         string[] memory tokens = vm.split(lines[line], " ");
         bool readable = tokens.length >= 4 && keccak256(bytes(tokens[3])) == keccak256("=");
         if (readable && tokens.length == 4) {
-            readable = line + 1 < lines.length && vm.indexOf(lines[line + 1], wrappedPrefix) == 0;
+            readable = line + 1 < lines.length && LibAffix.startsWith(lines[line + 1], wrappedPrefix);
             if (readable) {
                 tokens = vm.split(lines[line + 1], " ");
             }
@@ -1622,7 +1623,7 @@ library LibRainDeploySnapshot {
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
+            if (LibAffix.startsWith(lines[i], MECHANISM_DATA_DECLARATION)) {
                 mechanismData++;
             } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
@@ -1654,7 +1655,7 @@ library LibRainDeploySnapshot {
     function recordedDescribedByMeta(Vm vm, string memory path, string[] memory lines) internal pure returns (bool) {
         uint256 declarations = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], DESCRIBED_BY_META_DECLARATION) == 0) {
+            if (LibAffix.startsWith(lines[i], DESCRIBED_BY_META_DECLARATION)) {
                 declarations++;
             } else if (vm.contains(lines[i], DESCRIBED_BY_META_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
@@ -1664,14 +1665,6 @@ library LibRainDeploySnapshot {
             revert FrozenSnapshotDescribedByMetaAmbiguous(path);
         }
         return declarations == 1;
-    }
-
-    /// @param vm The Vm instance for file and string operations.
-    /// @param path A record file, as `frozenSnapshotPaths` returns it.
-    /// @return Whether it declares `MECHANISM_DATA`, with `recordedMechanismShape`'s refusals.
-    function recordDeclaresMechanismData(Vm vm, string memory path) internal view returns (bool) {
-        (bool mechanismData,) = recordedMechanismShape(vm, path);
-        return mechanismData;
     }
 
     /// The mechanism id a record declares: `ZOLTU_MECHANISM_ID` without `MECHANISM_DATA`, else its leading word when
@@ -1758,12 +1751,12 @@ library LibRainDeploySnapshot {
         returns (bytes32)
     {
         uint256 line = 0;
-        while (vm.indexOf(lines[line], MECHANISM_DATA_DECLARATION) != 0) {
+        while (!LibAffix.startsWith(lines[line], MECHANISM_DATA_DECLARATION)) {
             line++;
         }
         (, string memory value) = declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "hex\""));
         bytes memory literal = bytes(value);
-        if (literal.length < 70 || vm.indexOf(value, "hex\"") != 0) {
+        if (literal.length < 70 || !LibAffix.startsWith(value, "hex\"")) {
             revert FrozenSnapshotUnreadable(path);
         }
         bytes memory word = new bytes(66);
@@ -1993,7 +1986,7 @@ library LibRainDeploySnapshot {
     ) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
         string memory mechanismData = LibRainDeployDeclaration.mechanismById(d, facts.mechanismId, path)
-            .releasedMechanismData(d, vm, path, prefix);
+            .releasedMechanismData(d, vm, path, facts.mechanismData, prefix);
         string memory storedDeployedAddress =
             facts.perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
         string memory head = string.concat(

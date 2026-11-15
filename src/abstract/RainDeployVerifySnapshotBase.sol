@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {LibAffix} from "rain-string-0.3.10/src/lib/affix/LibAffix.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeployDeclaration, DeploySuite, DerivationSnapshotRevertFailed} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
@@ -271,7 +272,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         bool found = false;
         uint256 index = 0;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], declaration) != 0) {
+            if (!LibAffix.startsWith(lines[i], declaration)) {
                 continue;
             }
             if (found) {
@@ -338,7 +339,9 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             revert FrozenCodeRecordUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], ")");
-        if (closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";") || vm.indexOf(closed[0], "0x") != 0) {
+        if (
+            closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";") || !LibAffix.startsWith(closed[0], "0x")
+        ) {
             revert FrozenCodeRecordUnreadable(path);
         }
         try vm.parseBytes32(closed[0]) returns (bytes32 declared) {
