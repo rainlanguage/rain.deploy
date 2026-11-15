@@ -10,11 +10,12 @@ import {
     DeploySuite,
     ExternalDeployment
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {UndeclaredDependency} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
+import {UndeclaredDependency, UnreachedDependency} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
-import {ReachingDeploySuites} from "../../abstract/ReachingDeploySuites.sol";
+import {MOCK_EXTERNAL_RUNTIME_CODE, ReachingDeploySuites} from "../../abstract/ReachingDeploySuites.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibMockCreate2Mechanism, MOCK_CREATE2_SALT, MockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
 import {MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {
@@ -24,11 +25,13 @@ import {
 } from "../../concrete/MockReachingDeployable.sol";
 
 // An external deployment narrow enough for creation code shorter than a data contract prefix to embed.
-address constant NARROW_EXTERNAL_ADDRESS = address(uint160(0xc0ffee5eed));
+uint40 constant NARROW_EXTERNAL = 0xc0ffee5eed;
+address constant NARROW_EXTERNAL_ADDRESS = address(uint160(NARROW_EXTERNAL));
 
 /// @title RainDeployDeclarationChecksDataContractTest
-/// @notice The embedded-dependency check skips the payload of creation code that rebuilds exactly as
-/// `LibDataContract.contractCreationCode` of it, and checks all other creation code and every suite's mechanism data.
+/// @notice The embedded-dependency check requires no declaration for the payload of creation code that rebuilds
+/// exactly as `LibDataContract.contractCreationCode` of it, though that payload still reaches a declared dependency,
+/// and checks all other creation code and every suite's mechanism data.
 contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
     string constant SUITE = "mock-rows";
 
@@ -86,7 +89,7 @@ contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
         this.externalCheckDependenciesAreTheEmbeddedDeployments(suiteOf(creationCode), reachingExternalDeployments());
     }
 
-    function testDataContractRowsAreNotDependencies() external pure {
+    function testDataContractRowsNeedNoDeclaration() external pure {
         DeployDeclaration memory d = declaration();
         bytes memory creationCode = d.candidates[1].snapshot.creationCode;
         assertTrue(containsAddress(creationCode, MOCK_DEPLOYABLE_ADDRESS));
@@ -94,7 +97,7 @@ contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
         checkDependenciesAreTheEmbeddedDeployments(d);
     }
 
-    function testLargestDataContractRowsAreNotDependencies() external pure {
+    function testLargestDataContractRowsNeedNoDeclaration() external pure {
         bytes memory data = new bytes(uint256(type(uint16).max) - 1);
         bytes memory held = rows();
         for (uint256 i = 0; i < held.length; i++) {
@@ -105,6 +108,31 @@ contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
         checkDependenciesAreTheEmbeddedDeployments(
             declarationWith(suiteOf(creationCode), reachingExternalDeployments())
         );
+    }
+
+    /// As a snapshot root data contract declares the shards its rows hold.
+    function testDataContractRowsReachDeclaredDependencies() external pure {
+        DeploySuite memory suite = suiteOf(LibDataContract.contractCreationCode(rows()));
+        suite.dependencies = new DeployDependency[](2);
+        suite.dependencies[0] =
+            DeployDependency({deployedAddress: MOCK_DEPLOYABLE_ADDRESS, runtimeCode: type(MockDeployable).runtimeCode});
+        suite.dependencies[1] =
+            DeployDependency({deployedAddress: MOCK_EXTERNAL_ADDRESS, runtimeCode: MOCK_EXTERNAL_RUNTIME_CODE});
+        assertFalse(containsAddress(suite.mechanismData, MOCK_DEPLOYABLE_ADDRESS));
+        assertFalse(containsAddress(suite.mechanismData, MOCK_EXTERNAL_ADDRESS));
+        checkDependenciesAreTheEmbeddedDeployments(declarationWith(suite, reachingExternalDeployments()));
+    }
+
+    function testDataContractDependencyOutsideItsRowsIsUnreached() external {
+        DeploySuite memory suite =
+            suiteOf(LibDataContract.contractCreationCode(abi.encodePacked(MOCK_DEPLOYABLE_ADDRESS, uint256(1))));
+        suite.dependencies = new DeployDependency[](1);
+        suite.dependencies[0] =
+            DeployDependency({deployedAddress: MOCK_EXTERNAL_ADDRESS, runtimeCode: MOCK_EXTERNAL_RUNTIME_CODE});
+        assertFalse(containsAddress(suite.creationCode, MOCK_EXTERNAL_ADDRESS));
+        assertFalse(containsAddress(suite.mechanismData, MOCK_EXTERNAL_ADDRESS));
+        vm.expectRevert(abi.encodeWithSelector(UnreachedDependency.selector, SUITE, MOCK_EXTERNAL_ADDRESS));
+        this.externalCheckDependenciesAreTheEmbeddedDeployments(suite, reachingExternalDeployments());
     }
 
     function testCodeEmbeddingTheRowAddressesIsChecked() external {
@@ -128,8 +156,9 @@ contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
     function testDataContractWithAnotherLengthIsCode(uint16 length) external {
         vm.assume(length != rows().length + 1);
         bytes memory creationCode = LibDataContract.contractCreationCode(rows());
-        creationCode[1] = bytes1(uint8(length >> 8));
-        creationCode[2] = bytes1(uint8(length));
+        bytes2 field = bytes2(length);
+        creationCode[1] = field[0];
+        creationCode[2] = field[1];
         checkIsCode(creationCode);
     }
 
@@ -149,7 +178,7 @@ contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
     }
 
     function testCodeShorterThanADataContractPrefixIsCode() external {
-        bytes memory creationCode = abi.encodePacked(hex"64", uint40(uint160(NARROW_EXTERNAL_ADDRESS)), hex"3f");
+        bytes memory creationCode = abi.encodePacked(hex"64", NARROW_EXTERNAL, hex"3f");
         assertLt(creationCode.length, PREFIX_BYTES_LENGTH);
         ExternalDeployment[] memory externals = new ExternalDeployment[](1);
         externals[0] = ExternalDeployment({deployedAddress: NARROW_EXTERNAL_ADDRESS, codeHash: keccak256(hex"00")});
