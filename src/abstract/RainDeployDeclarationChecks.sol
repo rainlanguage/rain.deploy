@@ -196,16 +196,18 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every sibling or external deployment a suite's code embeds MUST be a
-    /// declared dependency, and every declared dependency MUST be embedded.
+    /// declared dependency, except in a data contract's rows, and every
+    /// declared dependency MUST be embedded.
     function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal pure {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
+            bool data = isDataContract(suites[i].creationCode);
             for (uint256 j = 0; j < suites.length; j++) {
-                checkDeclaredIfEmbedded(suites[i], suites[j].storedDeployedAddress);
+                checkDeclaredIfEmbedded(suites[i], data, suites[j].storedDeployedAddress);
             }
             for (uint256 j = 0; j < externals.length; j++) {
-                checkDeclaredIfEmbedded(suites[i], externals[j].deployedAddress);
+                checkDeclaredIfEmbedded(suites[i], data, externals[j].deployedAddress);
             }
             DeployDependency[] memory deps = suites[i].dependencies;
             for (uint256 j = 0; j < deps.length; j++) {
@@ -217,9 +219,12 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @param suite The suite.
+    /// @param data Whether its creation code is a data contract, whose rows need no declaration.
     /// @param deployment An address the suite MUST declare if its code embeds it.
-    function checkDeclaredIfEmbedded(DeploySuite memory suite, address deployment) internal pure {
-        if (embeds(suite, deployment) && !declares(suite.dependencies, deployment)) {
+    function checkDeclaredIfEmbedded(DeploySuite memory suite, bool data, address deployment) internal pure {
+        bool required = containsAddress(suite.mechanismData, deployment)
+            || (!data && containsAddress(suite.creationCode, deployment));
+        if (required && !declares(suite.dependencies, deployment)) {
             revert UndeclaredDependency(suite.suite, deployment);
         }
     }
@@ -278,11 +283,9 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// @param suite The suite.
     /// @param needle The address.
-    /// @return Whether the suite's creation code or mechanism data embeds it. A data contract's creation code only
-    /// returns its data, so it embeds nothing.
+    /// @return Whether the suite's creation code or mechanism data embeds it.
     function embeds(DeploySuite memory suite, address needle) internal pure returns (bool) {
-        return (!isDataContract(suite.creationCode) && containsAddress(suite.creationCode, needle))
-            || containsAddress(suite.mechanismData, needle);
+        return containsAddress(suite.creationCode, needle) || containsAddress(suite.mechanismData, needle);
     }
 
     /// @param creationCode A suite's creation code.
