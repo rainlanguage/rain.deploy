@@ -102,7 +102,9 @@ contract RainDeployDeclarationChecksDataContractTest is ReachingDeploySuites {
         }
         bytes memory creationCode = LibDataContract.contractCreationCode(data);
         assertTrue(containsAddress(creationCode, MOCK_DEPLOYABLE_ADDRESS));
-        checkDependenciesAreTheEmbeddedDeployments(declarationWith(suiteOf(creationCode), reachingExternalDeployments()));
+        checkDependenciesAreTheEmbeddedDeployments(
+            declarationWith(suiteOf(creationCode), reachingExternalDeployments())
+        );
     }
 
     function testCodeEmbeddingTheRowAddressesIsChecked() external {
