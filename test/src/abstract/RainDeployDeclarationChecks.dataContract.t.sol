@@ -23,7 +23,7 @@ import {
     MockReachingDeployable
 } from "../../concrete/MockReachingDeployable.sol";
 
-/// An external deployment narrow enough for creation code shorter than a data contract prefix to embed.
+// An external deployment narrow enough for creation code shorter than a data contract prefix to embed.
 address constant NARROW_EXTERNAL_ADDRESS = address(uint160(0xc0ffee5eed));
 
 /// @title RainDeployDeclarationChecksDataContractTest
