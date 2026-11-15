@@ -202,14 +202,16 @@ library LibRainDeployZoltuMechanism {
     }
 
     /// Refuses `FrozenSnapshotMechanismDataUnexpected` for a record declaring `MECHANISM_DATA`.
-    /// @param mechanismData Whether the record declares `MECHANISM_DATA`.
+    /// @param declaresMechanismData Whether the record declares `MECHANISM_DATA`.
     /// @return The expression of `mechanismData()`.
-    function releasedMechanismData(DeployDeclaration memory, Vm, string memory path, bool mechanismData, string memory)
-        internal
-        pure
-        returns (string memory)
-    {
-        if (mechanismData) {
+    function releasedMechanismData(
+        DeployDeclaration memory,
+        Vm,
+        string memory path,
+        bool declaresMechanismData,
+        string memory
+    ) internal pure returns (string memory) {
+        if (declaresMechanismData) {
             revert FrozenSnapshotMechanismDataUnexpected(path);
         }
         return "LibRainDeployZoltuMechanism.mechanismData()";
