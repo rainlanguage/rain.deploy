@@ -201,8 +201,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
-            uint256[] memory constants =
-                LibExtrospectBytecode.scanConstantsReachableInBytecode(suites[i].creationCode);
+            uint256[] memory constants = LibExtrospectBytecode.scanConstantsReachableInBytecode(suites[i].creationCode);
             for (uint256 j = 0; j < suites.length; j++) {
                 checkDeclaredIfEmbedded(suites[i], constants, suites[j].storedDeployedAddress);
             }
@@ -286,11 +285,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     /// @param constants The constants reachable in its creation code.
     /// @param needle The address.
     /// @return Whether `needle` is one of `constants` or appears in the suite's mechanism data.
-    function embeds(DeploySuite memory suite, uint256[] memory constants, address needle)
-        internal
-        pure
-        returns (bool)
-    {
+    function embeds(DeploySuite memory suite, uint256[] memory constants, address needle) internal pure returns (bool) {
         uint256 value = uint256(uint160(needle));
         for (uint256 i = 0; i < constants.length; i++) {
             if (constants[i] == value) {
