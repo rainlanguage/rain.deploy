@@ -41,6 +41,13 @@ checksum = "356774c9461a4486196d4c7c59f6e6e7099aa567eff4c40bb21ebc5f752f9389"
 integrity = "29de970d9b88ec2eac8a4914a04f76736862b96936aba8b5d61d99189064bbd4"
 
 [[dependencies]]
+name = "rain-solmem"
+version = "0.1.28"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-solmem/0_1_28_03-09-2026_07:34:16_rain.zip"
+checksum = "3dafbef001edb181683a43c3c295e3f88e2ffcedd751e986562e71e29560c9f0"
+integrity = "e7508cd81a998a67118a0fca314d504dc62850d6b535d29c824f696f214e4b23"
+
+[[dependencies]]
 name = "rain-string"
 version = "0.3.10"
 url = "https://soldeer-revisions.s3.amazonaws.com/rain-string/0_3_10_15-11-2026_12:10:13_rain.zip"
