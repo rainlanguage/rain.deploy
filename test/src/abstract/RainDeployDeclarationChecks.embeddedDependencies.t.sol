@@ -201,7 +201,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         uint256 value = uint160(MOCK_DEPLOYABLE_ADDRESS);
         for (uint256 bit = 0; bit < 160; bit++) {
             checkUnreached(
-                suiteOf(bytes.concat(push(value ^ (1 << bit), 20), STOP), only(siblingDependency())),
+                suiteOf(bytes.concat(push(value ^ (2 ** bit), 20), STOP), only(siblingDependency())),
                 MOCK_DEPLOYABLE_ADDRESS
             );
         }
