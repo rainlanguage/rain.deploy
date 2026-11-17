@@ -50,6 +50,12 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkDependenciesAreTheEmbeddedDeployments(declarationWith(suite));
     }
 
+    function externalCheckBeforeItsSibling(DeploySuite memory suite) external pure {
+        DeployDeclaration memory d = declarationWith(suite);
+        (d.candidates[0], d.candidates[1]) = (d.candidates[1], d.candidates[0]);
+        checkDependenciesAreTheEmbeddedDeployments(d);
+    }
+
     function suiteOf(bytes memory creationCode, DeployDependency[] memory dependencies)
         internal
         pure
@@ -152,6 +158,13 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkUndeclared(
             suiteOf(bytes.concat(push(uint160(MOCK_EXTERNAL_ADDRESS), width), STOP), only(siblingDependency())),
             MOCK_EXTERNAL_ADDRESS
+        );
+    }
+
+    function testSuiteListedBeforeTheSiblingItEmbedsMustDeclareIt() external {
+        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, MOCK_DEPLOYABLE_ADDRESS));
+        this.externalCheckBeforeItsSibling(
+            suiteOf(bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), STOP), new DeployDependency[](0))
         );
     }
 
