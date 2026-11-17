@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {LibAffix} from "rain-string-0.3.10/src/lib/affix/LibAffix.sol";
+import {LibAffix} from "rain-string-0.3.11/src/lib/affix/LibAffix.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {
     LibCodeGen,
