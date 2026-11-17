@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {LibAffix} from "rain-string-0.3.10/src/lib/affix/LibAffix.sol";
+import {LibAffix} from "rain-string-0.3.11/src/lib/affix/LibAffix.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeployDeclaration, DeploySuite, DerivationSnapshotRevertFailed} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
