@@ -6,7 +6,8 @@ import {
     DeployCandidate,
     DeployDeclaration,
     DeployDependency,
-    DeploySuite
+    DeploySuite,
+    ExternalDeployment
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {UndeclaredDependency, UnreachedDependency} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -53,6 +54,12 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
     function externalCheckBeforeItsSibling(DeploySuite memory suite) external pure {
         DeployDeclaration memory d = declarationWith(suite);
         (d.candidates[0], d.candidates[1]) = (d.candidates[1], d.candidates[0]);
+        checkDependenciesAreTheEmbeddedDeployments(d);
+    }
+
+    function externalCheckAmong(DeploySuite memory suite, ExternalDeployment[] memory externals) external pure {
+        DeployDeclaration memory d = declarationWith(suite);
+        d.externalDeployments = externals;
         checkDependenciesAreTheEmbeddedDeployments(d);
     }
 
@@ -158,6 +165,16 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkUndeclared(
             suiteOf(bytes.concat(push(uint160(MOCK_EXTERNAL_ADDRESS), width), STOP), only(siblingDependency())),
             MOCK_EXTERNAL_ADDRESS
+        );
+    }
+
+    function testSuiteMustDeclareAnExternalListedAfterAnother() external {
+        ExternalDeployment[] memory externals = new ExternalDeployment[](2);
+        externals[0] = ExternalDeployment({deployedAddress: address(0xdead), codeHash: keccak256("")});
+        externals[1] = reachingExternalDeployments()[0];
+        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, MOCK_EXTERNAL_ADDRESS));
+        this.externalCheckAmong(
+            suiteOf(bytes.concat(pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), new DeployDependency[](0)), externals
         );
     }
 
