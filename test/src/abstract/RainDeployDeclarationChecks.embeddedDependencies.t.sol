@@ -238,5 +238,6 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
     function testDeclaredDependencyNothingEmbedsIsUnreached() external {
         checkUnreached(suiteOf(STOP, only(siblingDependency())), MOCK_DEPLOYABLE_ADDRESS);
         checkUnreached(suiteOf(STOP, only(externalDependency())), MOCK_EXTERNAL_ADDRESS);
+        checkUnreached(suiteOf(bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), STOP), both()), MOCK_EXTERNAL_ADDRESS);
     }
 }
