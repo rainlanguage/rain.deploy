@@ -160,8 +160,15 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkUndeclared(suiteOf(creationCode, new DeployDependency[](0)), MOCK_DEPLOYABLE_ADDRESS);
     }
 
-    function testConstantHoldingTheAddressAmongOtherBytesIsNotEmbedded() external {
-        bytes memory creationCode = bytes.concat(push(uint256(uint160(MOCK_DEPLOYABLE_ADDRESS)) << 96, 32), STOP);
+    function testConstantHoldingTheAddressAmongOtherBytesIsNotEmbedded(uint256 above) external {
+        above = bound(above, 1, type(uint96).max);
+        uint256 value = uint160(MOCK_DEPLOYABLE_ADDRESS);
+        checkNotEmbedded(value << 96);
+        checkNotEmbedded((above << 160) | value);
+    }
+
+    function checkNotEmbedded(uint256 constantValue) internal {
+        bytes memory creationCode = bytes.concat(push(constantValue, 32), STOP);
         assertTrue(containsAddress(creationCode, MOCK_DEPLOYABLE_ADDRESS));
         checkUnreached(suiteOf(creationCode, only(siblingDependency())), MOCK_DEPLOYABLE_ADDRESS);
     }
