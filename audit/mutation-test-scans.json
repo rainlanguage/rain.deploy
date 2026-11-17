@@ -1828,5 +1828,37 @@
       "concat: flat[offset + j] -> flat[j], offset advance deleted, copy loop from i = 1, total + 1 per array, inner loop from j = 1: 5 KILLED by testConcatOrderPreserved and testConcatShapes (plus testConcatEmptyInnerAmongNonEmpty / testConcatAllInnerEmpty where the shape reaches them).",
       "emitter: concat subpath swapped for the suites subpath in concatImportPathForToml, concatImportPathInThisRepo, the pinned branch and the no-pin branch of importPathForToml, and derivedConcatImportPath reading the suites path: 5 KILLED by testConcatImportPathForTomlFollowsThePin (and the aggregate writer / committed-file tests where in-repo). Concat import dropped from aggregateImportBlock: KILLED by testAggregateImportBlockImportsEveryReleasedLib, testAggregateImportBlockTakesTheImportPaths, testTheCommittedAggregateIsWhatTheGeneratorEmits. Concat return dropped from aggregateLibraryBlock: KILLED by testAggregateLibraryBlockConcatenatesEveryReleasedLib, testAggregateLibraryBlockDeclaresNothingForNoContracts, testTheCommittedAggregateIsWhatTheGeneratorEmits."
     ]
+  },
+  {
+    "timestamp": "2026-11-17T13:59:21Z",
+    "commit": "9021bba4e173bfa35fcb88dac6f379fc54ab56b9",
+    "testsAfterCommit": "f59add503d3aca57462efc06aed12cfa3c36d48a",
+    "publishedTag": "sol-v0.1.33",
+    "commitsAheadOfTag": 10,
+    "scope": "PR #392, the changed code in src/abstract/RainDeployDeclarationChecks.sol: checkDependenciesAreTheEmbeddedDeployments per-suite constant scan, loop bounds and call arguments (C01-C29), checkDeclaredIfEmbedded (D01-D10), embeds constant comparison and mechanism-data fallback (E01-E20); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 59,
+      "behavioursProbed": 59,
+      "killedByExistingTests": 52,
+      "gapsFilled": 7,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Single-line literal mutants applied by a bash runner, each run as timeout 600 forge test --match-path 'test/src/abstract/RainDeployDeclarationChecks*' (RainDeployDeclarationChecks.embeddedDependencies.t.sol: 10 green at baseline 2a8f7cd, 13 after the gap tests), src restored with git checkout after each. A run counted only when PASS lines plus the summary's failed count equalled the baseline; killers read with \\[FAIL.*\\] (\\S+).",
+      "Scan input (scanned code swapped for suites[0], the last suite, mechanismData, storedRuntimeCode, empty), outer loop bound, sibling/external/dependency loop bounds and starts, constants replaced by an empty array at each of the three call sites, call arguments swapped, calls deleted, the UnreachedDependency condition negated or forced false and its revert arguments: KILLED by testReachablePushEmbedsAnUndeclaredSibling, testReachablePushEmbedsAnUndeclaredExternalWithALeadingZeroByte, testDeclaredPushedDeploymentsPass, testPushAfterAHaltAJumpCanPassEmbeds, testDeclaredDependencyNothingEmbedsIsUnreached, testMechanismDataReachesADeclaredDependency and the data-contract tests.",
+      "checkDeclaredIfEmbedded: && to ||, either conjunct dropped or negated, empty constants, empty dependency list, condition forced false, revert arguments: 10/10 KILLED.",
+      "embeds: needle value +1, << 8, | 1 << 160; loop skipping the last or first constant or reading only the first; != , >=, <=; return false or break on a match; fallback false, true, creationCode, mechanismData || creationCode, storedRuntimeCode: KILLED. Low-160-bit match, constants[i] & value == value, and a left-aligned match (value << 96) are killed only by testConstantHoldingTheAddressAmongOtherBytesIsNotEmbedded, which 2a8f7cd added after the frozen head.",
+      "7 survivors, each killed by a gap test: C07 (outer loop from i = 1), C08 (sibling loop skipping the last suite) and C13 (sibling address read from suites[0]) by testSuiteListedBeforeTheSiblingItEmbedsMustDeclareIt (eb30bf7), which lists the embedding suite before its sibling; C18 (external address read from externals[0]) by testSuiteMustDeclareAnExternalListedAfterAnother (87e88dd); C26 (embeds reading deps[0]) and C28 (UnreachedDependency naming deps[0]) by a third case in testDeclaredDependencyNothingEmbedsIsUnreached (e72f618), an unreached dependency declared after an embedded one; E12 (match ignoring the low byte) by testConstantOneBitFromTheAddressIsNotEmbedded (f59add5), every single-bit flip of the address pushed as a constant."
+    ]
   }
 ]
