@@ -351,7 +351,6 @@ library LibRainDeployDeclaration {
             revert InvalidDeploySuiteKey(index, suite);
         }
     }
-    }
 
     /// The released suites then a copy of each candidate snapshot, refusing an invalid or repeated key.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
