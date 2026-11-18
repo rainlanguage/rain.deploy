@@ -344,7 +344,7 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
         }
         assertGt(retired, 0, "no AddressRegistry release declared");
         assertGt(beforeZerog, 0, "no release before zerog declared");
-        assertFalse(requiresSuiteOn(suiteByName(d, "config-registry@0_1_30"), LibRainDeploy.ZEROG));
+        assertFalse(requiresSuiteOn(suiteByName(d, "config-registry@0_1_35"), LibRainDeploy.ZEROG));
     }
 
     function isListed(string[] memory networks, string memory network) internal pure returns (bool) {

@@ -26,7 +26,7 @@ contract RegistryDeploySuitesRetiredNetworksTest is Test, RegistryDeploySuites {
             released[i] = record[i];
         }
         released[record.length] = abi.decode(abi.encode(record[record.length - 1]), (DeploySuite));
-        released[record.length].suite = "config-registry@0_1_31";
+        released[record.length].suite = "config-registry@0_1_36";
         LibRainDeployDeclaration.addReleased(d, narrowReleasedNetworks(released));
 
         string[] memory retiredNetworks = addressRegistryNetworks();

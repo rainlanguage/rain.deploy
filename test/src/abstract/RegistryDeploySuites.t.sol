@@ -7,6 +7,7 @@ import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abst
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibReleasedSuites} from "../../../src/lib/LibReleasedSuites.sol";
 
 /// @title RegistryDeploySuitesTest
 /// @notice The fields of this repo's declaration that nothing derives and no
@@ -361,7 +362,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
         }
         assertEq(suiteByName(d, "address-registry@0_1_18").networks.length, 9);
         assertEq(suiteByName(d, "address-registry@0_1_7").networks.length, 9);
-        assertEq(suiteByName(d, "config-registry@0_1_30").networks.length, 9);
+        assertEq(suiteByName(d, "config-registry@0_1_35").networks.length, 9);
         assertEq(suiteByName(d, "migration-registry@0_1_7").networks.length, 9);
         assertEq(d.networks.length, 10);
         assertEq(d.networks[9], LibRainDeploy.ZEROG);
@@ -384,13 +385,29 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// `LAST_RELEASE_BEFORE_ZEROG`, compared by number rather than text, and
     /// an untagged key is not.
     function testReleasedBeforeZerogBoundary() external pure {
-        assertTrue(releasedBeforeZerog("config-registry@0_1_30"));
+        assertTrue(releasedBeforeZerog("config-registry@0_1_35"));
         assertTrue(releasedBeforeZerog("migration-registry@0_1_7"));
         assertTrue(releasedBeforeZerog("migration-registry@0_0_99"));
-        assertFalse(releasedBeforeZerog("config-registry@0_1_31"));
+        assertFalse(releasedBeforeZerog("config-registry@0_1_36"));
         assertFalse(releasedBeforeZerog("config-registry@0_1_100"));
         assertFalse(releasedBeforeZerog("config-registry@0_2_0"));
         assertFalse(releasedBeforeZerog("migration-registry@1_0_0"));
         assertFalse(releasedBeforeZerog("config-registry"));
+    }
+
+    /// No release ships `zerog` yet, so `LAST_RELEASE_BEFORE_ZEROG` names the
+    /// newest release. The first release cut with `zerog` in its roster
+    /// changes this to assert that release is required on `zerog`.
+    function testLastReleaseBeforeZerogIsTheNewestRelease() external pure {
+        DeploySuite[] memory released = LibReleasedSuites.releasedSuites();
+        uint256 atCutoff = 0;
+        for (uint256 i = 0; i < released.length; i++) {
+            assertTrue(releasedBeforeZerog(released[i].suite), released[i].suite);
+            string memory atCutoffKey = string.concat(suiteKeyName(released[i].suite), "@", LAST_RELEASE_BEFORE_ZEROG);
+            if (keccak256(bytes(released[i].suite)) == keccak256(bytes(atCutoffKey))) {
+                atCutoff++;
+            }
+        }
+        assertGt(atCutoff, 0, "no release at LAST_RELEASE_BEFORE_ZEROG");
     }
 }
