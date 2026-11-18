@@ -12,6 +12,7 @@ import {MockCreate2Deploy} from "../../concrete/MockCreate2Deploy.sol";
 import {MockCreate2Factory} from "../../concrete/MockCreate2Factory.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {
+    PRE_DEPLOY_CHECK_DEPENDENCY as DEPENDENCY,
     PreDeployCheckCall,
     PreDeployCheckRecordingDeploy,
     PreDeployCheckRefused
@@ -20,8 +21,6 @@ import {
 /// @title RainDeployBroadcastPreDeployCheckTest
 /// @notice `preDeployCheck` over a per-network mechanism broadcast to Arbitrum One then Polygon on local forks.
 contract RainDeployBroadcastPreDeployCheckTest is Test {
-    address constant DEPENDENCY = address(0xdef);
-
     PreDeployCheckRecordingDeploy internal sDeploy;
     LocalForkVm internal sForkVm;
 

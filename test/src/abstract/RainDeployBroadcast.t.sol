@@ -612,10 +612,11 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         ExampleDeploy deploy = new ExampleDeploy();
         DeploySuite memory suite =
             declaredSuite(deploy, LibBeaconTest.beaconSuite("beacon@0_0_1", address(deploy), address(0xB0B)));
-        address dependency = address(0xDE9);
+        address dependency = LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
         assertEq(dependency.code.length, 0);
         suite.dependencies = new DeployDependency[](1);
-        suite.dependencies[0] = DeployDependency({deployedAddress: dependency, runtimeCode: hex"00"});
+        suite.dependencies[0] =
+            DeployDependency({deployedAddress: dependency, runtimeCode: type(MockDeployableV2).runtimeCode});
         bytes32 factoryCodeHash = LibRainDeploy.ZOLTU_FACTORY.codehash;
         deploy.externalCheckSeatsNoDeployKey(suite, declaredChainIds(deploy), vm.addr(1));
         assertEq(suite.storedDeployedAddress.code.length, 0);
