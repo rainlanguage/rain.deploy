@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibExtrospectBytecode} from "rain-extrospection-0.1.30/src/lib/LibExtrospectBytecode.sol";
+import {LibExtrospectBytecode} from "rain-extrospection-0.1.31/src/lib/LibExtrospectBytecode.sol";
 
 import {
     DeployCandidate,
