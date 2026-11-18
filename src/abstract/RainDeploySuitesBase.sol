@@ -125,7 +125,7 @@ error CandidateSourceCompiles(string suite, string artifactPath);
 
 /// Thrown when the state snapshot taken around a local deploy could not be
 /// reverted. A local deploy plants code at the derived address, clears its
-/// nonce and etches the suite's declared dependencies; if that cannot be
+/// nonce and etches the suite's dependency closure; if that cannot be
 /// undone, every later local deploy reads state this one created, and the
 /// chain-anchored checks compare a locally planted deployment against itself,
 /// and the broadcast seat check reads a deployment planted under an earlier
@@ -217,19 +217,8 @@ struct DeploySuite {
     /// declared state, and resolving to one refuses it. It is still held to
     /// `<path>:<Name>`, which it spells against the file it WOULD have.
     string artifactPath;
-    /// What MUST already be on a network before this suite is broadcast there:
-    /// an address and the runtime code that belongs at it, per dependency.
-    /// Ordinarily other suites' recorded pins — a constructor that bakes in a
-    /// beacon, or a fallback that delegatecalls a facet, silently produces a
-    /// broken deployment if its target is absent.
-    ///
-    /// The code half is a CLAIM about every network, and it is checked as one.
-    /// `RainDeployVerifyBase.deriveDeployment` etches it so that such a
-    /// constructor can run at all, which makes this suite's derived code hash a
-    /// function of what is declared here; `LibRainDeploy.deployToNetworks`
-    /// hashes the live code at each address against it, per network, before it
-    /// broadcasts anything. So a wrong declaration is a red deploy run rather
-    /// than a wrong hash frozen into a release.
+    /// What this suite's own code or mechanism data reaches, each address with the runtime code that MUST be at it;
+    /// local deploys and broadcast fork checks hold the transitive closure of these.
     DeployDependency[] dependencies;
     /// What the suite's mechanism needs: `abi.encode(id, payload)` for the mechanism with that id, Zoltu's included.
     bytes mechanismData;

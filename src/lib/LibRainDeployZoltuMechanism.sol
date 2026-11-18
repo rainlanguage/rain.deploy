@@ -109,7 +109,7 @@ library LibRainDeployZoltuMechanism {
         return LibRainDeploy.zoltuDeployStep;
     }
 
-    /// Deploys through the etched Zoltu factory with the declared dependencies etched, refusing
+    /// Deploys through the etched Zoltu factory with its dependency closure etched, refusing
     /// `ZoltuDerivationMismatch` where the factory and `LibRainDeploy.zoltuAddress` disagree.
     /// @return Its one address, once per each of its `networks`.
     function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)

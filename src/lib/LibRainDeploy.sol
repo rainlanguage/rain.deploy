@@ -41,11 +41,8 @@ struct DeployDependency {
     /// The address that MUST already have code on a network before the suite
     /// declaring it is broadcast there.
     address deployedAddress;
-    /// The runtime code that MUST be at `deployedAddress`:
-    /// `RainDeployVerifyBase.deriveDeployment` etches exactly these bytes, so
-    /// a derived code hash is a function of them, and
-    /// `LibRainDeploy.deployToNetworks` holds the chain to them before it
-    /// broadcasts.
+    /// The runtime code that MUST be at `deployedAddress`, etched by local deploys and held against each forked
+    /// chain before a broadcast.
     bytes runtimeCode;
 }
 
