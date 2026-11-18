@@ -14,6 +14,7 @@ import {
 } from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
+import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
@@ -214,7 +215,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         function(Vm, string memory, address, bytes memory) internal returns (address) step = deployStep(d, suite);
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
         for (uint256 i = 0; i < configs.length; i++) {
-            LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], suite.dependencies);
+            LibRainDeploy.selectCheckedFork(
+                vm, configs[i], forkIds[i], LibRainDeployDeclaration.dependencyClosure(d, suite)
+            );
             preDeployCheck(d, suite, configs[i]);
             LibRainDeploy.deployStepToSelectedFork(
                 vm,

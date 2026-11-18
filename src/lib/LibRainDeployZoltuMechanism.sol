@@ -117,7 +117,7 @@ library LibRainDeployZoltuMechanism {
         returns (address[] memory)
     {
         address expected = deployedAddress(d, suite, 0);
-        LibRainDeploy.etchDependencies(vm, suite.dependencies);
+        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite);
         vm.etch(expected, hex"");
         vm.resetNonce(expected);
         address zoltuAddress = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);

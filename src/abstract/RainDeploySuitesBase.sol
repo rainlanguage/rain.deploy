@@ -163,6 +163,13 @@ error LegacyRecordAmbiguous(string path);
 /// @param id The shared id.
 error DuplicateMechanism(bytes32 id);
 
+/// @param suite The suite.
+/// @param dependency A declared dependency that is neither a sibling nor an external deployment.
+error UnknownDependency(string suite, address dependency);
+
+/// @param suite The suite whose dependency closure reaches its own address.
+error DependencyCycle(string suite);
+
 /// One deployable unit.
 struct DeploySuite {
     /// The key. Unique across every suite a repo declares, and held to the key
@@ -713,32 +720,7 @@ abstract contract RainDeploySuitesBase {
     /// @param index Position in `allSuites()`, for the refusal to name.
     /// @param suite The key to check.
     function checkSuiteKey(uint256 index, string memory suite) internal pure {
-        bytes memory key = bytes(suite);
-        // Where the tag starts, and zero until an `@` is seen. Zero is not a
-        // position a tag can start at, because an `@` opening the key leaves
-        // the name half empty and is refused below.
-        uint256 tagStart = 0;
-
-        for (uint256 i = 0; i < key.length; i++) {
-            bytes1 char = key[i];
-            if (char == "@") {
-                if (i == 0 || tagStart != 0) {
-                    revert InvalidDeploySuiteKey(index, suite);
-                }
-                tagStart = i + 1;
-            } else {
-                bool nameAlphabet = (char >= "a" && char <= "z") || char == "-";
-                bool tagAlphabet = (char >= "0" && char <= "9") || char == "_";
-                if (!(nameAlphabet || (tagStart != 0 && tagAlphabet))) {
-                    revert InvalidDeploySuiteKey(index, suite);
-                }
-            }
-        }
-
-        // The empty key and a trailing at sign: the loop only refuses bytes that are there.
-        if (tagStart == key.length) {
-            revert InvalidDeploySuiteKey(index, suite);
-        }
+        LibRainDeployDeclaration.checkSuiteKey(index, suite);
     }
 
     /// Every suite this repo declares: the released ones followed by the
@@ -758,28 +740,7 @@ abstract contract RainDeploySuitesBase {
     /// perfectly and still be the same key.
     /// @return A fresh array: the released suites themselves, each candidate snapshot copied.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = d.released;
-        checkCandidates(d);
-        DeployCandidate[] memory candidates = d.candidates;
-
-        DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
-        for (uint256 i = 0; i < released.length; i++) {
-            suites[i] = released[i];
-        }
-        for (uint256 i = 0; i < candidates.length; i++) {
-            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
-        }
-
-        for (uint256 i = 0; i < suites.length; i++) {
-            checkSuiteKey(i, suites[i].suite);
-            for (uint256 j = i + 1; j < suites.length; j++) {
-                if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
-                    revert DuplicateDeploySuite(suites[i].suite);
-                }
-            }
-        }
-
-        return suites;
+        return LibRainDeployDeclaration.allSuites(d);
     }
 
     /// Every declared key, comma separated, for the unknown-suite error.
