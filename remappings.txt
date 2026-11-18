@@ -1,6 +1,6 @@
 @openzeppelin-contracts-5.7.0/=dependencies/@openzeppelin-contracts-5.7.0/
 forge-std-1.17.0/=dependencies/forge-std-1.17.0/
-rain-extrospection-0.1.19/=dependencies/rain-extrospection-0.1.19/
+rain-extrospection-0.1.30/=dependencies/rain-extrospection-0.1.30/
 rain-lib-memkv-0.2.0/=dependencies/rain-lib-memkv-0.2.0/
 rain-metadata-0.1.46/=dependencies/rain-metadata-0.1.46/
 rain-sol-codegen-0.1.39/=dependencies/rain-sol-codegen-0.1.39/
