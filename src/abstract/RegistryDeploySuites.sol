@@ -9,7 +9,9 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
+import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
+import {LibRainDeploySnapshot, UnreleasableVersion} from "../lib/LibRainDeploySnapshot.sol";
 import {LibRainDeployZoltuMechanism} from "../lib/LibRainDeployZoltuMechanism.sol";
 import {
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
@@ -165,48 +167,25 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
         return released;
     }
 
-    /// Whether a suite key's `<major>_<minor>_<patch>` tag is at or before
-    /// `LAST_RELEASE_BEFORE_ZEROG`. A key with no tag is not.
+    /// Whether a suite key's tag is at or before `LAST_RELEASE_BEFORE_ZEROG`,
+    /// ordered by `LibRainDeploySnapshot.tagPrecedes`. A key with no tag is
+    /// not, and a tag that is not `isTag` is refused.
     /// @param suite The suite key.
     /// @return True if the release was cut before `zerog` joined the roster.
     function releasedBeforeZerog(string memory suite) internal pure returns (bool) {
         bytes memory key = bytes(suite);
-        uint256 start = key.length;
-        for (uint256 i = 0; i < key.length; i++) {
-            if (key[i] == "@") {
-                start = i + 1;
-                break;
-            }
-        }
-        if (start == key.length) {
+        uint256 start = bytes(suiteKeyName(suite)).length + 1;
+        if (start > key.length) {
             return false;
         }
         bytes memory tag = new bytes(key.length - start);
         for (uint256 i = 0; i < tag.length; i++) {
             tag[i] = key[start + i];
         }
-        uint256[3] memory version = tagVersion(tag);
-        uint256[3] memory cutoff = tagVersion(bytes(LAST_RELEASE_BEFORE_ZEROG));
-        for (uint256 i = 0; i < 3; i++) {
-            if (version[i] != cutoff[i]) {
-                return version[i] < cutoff[i];
-            }
+        if (!LibRainDeploySnapshot.isTag(string(tag))) {
+            revert UnreleasableVersion(string(tag));
         }
-        return true;
-    }
-
-    /// The three numbers of a `<major>_<minor>_<patch>` tag.
-    /// @param tag The tag, e.g. `0_1_30`.
-    /// @return version The major, minor and patch numbers.
-    function tagVersion(bytes memory tag) internal pure returns (uint256[3] memory version) {
-        uint256 component = 0;
-        for (uint256 i = 0; i < tag.length; i++) {
-            if (tag[i] == "_") {
-                component++;
-            } else {
-                version[component] = version[component] * 10 + (uint8(tag[i]) - 0x30);
-            }
-        }
+        return !LibRainDeploySnapshot.tagPrecedes(StdConstants.VM, LAST_RELEASE_BEFORE_ZEROG, string(tag));
     }
 
     /// One entry per contract this repo deploys. A third deployed contract

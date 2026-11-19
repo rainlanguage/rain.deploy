@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibRainDeploySnapshot, UnreleasableVersion} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuites} from "../../../src/lib/LibReleasedSuites.sol";
 
 /// @title RegistryDeploySuitesTest
@@ -393,6 +393,24 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
         assertFalse(releasedBeforeZerog("config-registry@0_2_0"));
         assertFalse(releasedBeforeZerog("migration-registry@1_0_0"));
         assertFalse(releasedBeforeZerog("config-registry"));
+    }
+
+    /// A wrapper so `releasedBeforeZerog` reverts at a depth
+    /// `vm.expectRevert` reaches.
+    /// @param suite The suite key.
+    /// @return Whether the release was cut before `zerog` joined the roster.
+    function externalReleasedBeforeZerog(string memory suite) external pure returns (bool) {
+        return releasedBeforeZerog(suite);
+    }
+
+    /// A key whose tag is not `isTag` is refused rather than ordered, so a
+    /// misspelled tag cannot land on either side of the cutoff.
+    function testReleasedBeforeZerogRefusesANonTag() external {
+        string[5] memory tags = ["0_1", "0_1_3a", "0_1_35_1", "0_01_7", ""];
+        for (uint256 i = 0; i < tags.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, tags[i]));
+            this.externalReleasedBeforeZerog(string.concat("config-registry@", tags[i]));
+        }
     }
 
     /// No release ships `zerog` yet, so `LAST_RELEASE_BEFORE_ZEROG` names the

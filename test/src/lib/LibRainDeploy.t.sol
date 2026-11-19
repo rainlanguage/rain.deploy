@@ -86,6 +86,36 @@ contract LibRainDeployTest is Test {
         assertEq(networks[9], LibRainDeploy.ZEROG);
     }
 
+    /// Every roster entry MUST keep its name and default RPC url. The name is
+    /// the `[rpc_endpoints]` alias, the `<NAME>_RPC_URL` env var and the key
+    /// rainix binds the fork secret on, and the url is the `.env.example`
+    /// default. Spelled out, because comparing the roster to its own constants
+    /// passes for any spelling.
+    function testSupportedNetworkNamesAndDefaultRpcUrls() external pure {
+        SupportedNetwork[] memory configs = LibRainDeploy.supportedNetworkConfigs();
+        assertEq(configs.length, 10);
+        assertEq(configs[0].name, "arbitrum");
+        assertEq(configs[0].defaultRpcUrl, "https://arb1.arbitrum.io/rpc");
+        assertEq(configs[1].name, "base");
+        assertEq(configs[1].defaultRpcUrl, "https://mainnet.base.org");
+        assertEq(configs[2].name, "base_sepolia");
+        assertEq(configs[2].defaultRpcUrl, "https://sepolia.base.org");
+        assertEq(configs[3].name, "bsc");
+        assertEq(configs[3].defaultRpcUrl, "https://bsc-dataseed.binance.org");
+        assertEq(configs[4].name, "ethereum");
+        assertEq(configs[4].defaultRpcUrl, "https://eth-pokt.nodies.app");
+        assertEq(configs[5].name, "flare");
+        assertEq(configs[5].defaultRpcUrl, "https://flare-api.flare.network/ext/C/rpc");
+        assertEq(configs[6].name, "hyperevm");
+        assertEq(configs[6].defaultRpcUrl, "https://rpc.hyperliquid.xyz/evm");
+        assertEq(configs[7].name, "polygon");
+        assertEq(configs[7].defaultRpcUrl, "https://polygon-bor-rpc.publicnode.com");
+        assertEq(configs[8].name, "robinhood");
+        assertEq(configs[8].defaultRpcUrl, "https://rpc.mainnet.chain.robinhood.com");
+        assertEq(configs[9].name, "zerog");
+        assertEq(configs[9].defaultRpcUrl, "https://evmrpc.0g.ai");
+    }
+
     /// `supportedNetworks` MUST be the names of `supportedNetworkConfigs`, in
     /// the same order and with nothing dropped.
     ///
