@@ -7,7 +7,6 @@ import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abst
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot, UnreleasableVersion} from "../../../src/lib/LibRainDeploySnapshot.sol";
-import {LibReleasedSuites} from "../../../src/lib/LibReleasedSuites.sol";
 
 /// @title RegistryDeploySuitesTest
 /// @notice The fields of this repo's declaration that nothing derives and no
@@ -362,7 +361,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
         }
         assertEq(suiteByName(d, "address-registry@0_1_18").networks.length, 9);
         assertEq(suiteByName(d, "address-registry@0_1_7").networks.length, 9);
-        assertEq(suiteByName(d, "config-registry@0_1_35").networks.length, 9);
+        assertEq(suiteByName(d, "config-registry@0_1_37").networks.length, 9);
         assertEq(suiteByName(d, "migration-registry@0_1_7").networks.length, 9);
         assertEq(d.networks.length, 10);
         assertEq(d.networks[9], LibRainDeploy.ZEROG);
@@ -385,10 +384,10 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// `LAST_RELEASE_BEFORE_ZEROG`, compared by number rather than text, and
     /// an untagged key is not.
     function testReleasedBeforeZerogBoundary() external pure {
-        assertTrue(releasedBeforeZerog("config-registry@0_1_35"));
+        assertTrue(releasedBeforeZerog("config-registry@0_1_37"));
         assertTrue(releasedBeforeZerog("migration-registry@0_1_7"));
         assertTrue(releasedBeforeZerog("migration-registry@0_0_99"));
-        assertFalse(releasedBeforeZerog("config-registry@0_1_36"));
+        assertFalse(releasedBeforeZerog("config-registry@0_1_38"));
         assertFalse(releasedBeforeZerog("config-registry@0_1_100"));
         assertFalse(releasedBeforeZerog("config-registry@0_2_0"));
         assertFalse(releasedBeforeZerog("migration-registry@1_0_0"));
@@ -413,19 +412,28 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
         }
     }
 
-    /// No release ships `zerog` yet, so `LAST_RELEASE_BEFORE_ZEROG` names the
-    /// newest release. The first release cut with `zerog` in its roster
-    /// changes this to assert that release is required on `zerog`.
-    function testLastReleaseBeforeZerogIsTheNewestRelease() external pure {
-        DeploySuite[] memory released = LibReleasedSuites.releasedSuites();
+    /// `LAST_RELEASE_BEFORE_ZEROG` names the newest release cut before `zerog`
+    /// joined the roster, 0_1_37. 0_1_38 is the first release cut with `zerog`
+    /// in its roster, so it and every later release are required on `zerog`,
+    /// and no release up to the cutoff is.
+    function testReleasesAfterTheLastReleaseBeforeZerogAreRequiredOnZerog() external pure {
+        DeployDeclaration memory d = declaration();
         uint256 atCutoff = 0;
-        for (uint256 i = 0; i < released.length; i++) {
-            assertTrue(releasedBeforeZerog(released[i].suite), released[i].suite);
-            string memory atCutoffKey = string.concat(suiteKeyName(released[i].suite), "@", LAST_RELEASE_BEFORE_ZEROG);
-            if (keccak256(bytes(released[i].suite)) == keccak256(bytes(atCutoffKey))) {
+        uint256 afterCutoff = 0;
+        for (uint256 i = 0; i < d.released.length; i++) {
+            bool beforeZerog = releasedBeforeZerog(d.released[i].suite);
+            assertEq(requiresSuiteOn(d.released[i], LibRainDeploy.ZEROG), !beforeZerog, d.released[i].suite);
+            if (!beforeZerog) {
+                afterCutoff++;
+            }
+            string memory atCutoffKey = string.concat(suiteKeyName(d.released[i].suite), "@", LAST_RELEASE_BEFORE_ZEROG);
+            if (keccak256(bytes(d.released[i].suite)) == keccak256(bytes(atCutoffKey))) {
                 atCutoff++;
             }
         }
         assertGt(atCutoff, 0, "no release at LAST_RELEASE_BEFORE_ZEROG");
+        assertGt(afterCutoff, 0, "no release after LAST_RELEASE_BEFORE_ZEROG");
+        assertTrue(requiresSuiteOn(suiteByName(d, "config-registry@0_1_38"), LibRainDeploy.ZEROG));
+        assertTrue(requiresSuiteOn(suiteByName(d, "migration-registry@0_1_38"), LibRainDeploy.ZEROG));
     }
 }

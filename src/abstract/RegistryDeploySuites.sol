@@ -100,7 +100,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     string constant ADDRESS_REGISTRY_SUITE = "address-registry";
 
     /// The newest release cut before `zerog` joined the roster.
-    string constant LAST_RELEASE_BEFORE_ZEROG = "0_1_35";
+    string constant LAST_RELEASE_BEFORE_ZEROG = "0_1_37";
 
     /// The networks the `AddressRegistry` releases were live on when it was
     /// retired. Frozen: no candidate carries its bytecode, so nothing can

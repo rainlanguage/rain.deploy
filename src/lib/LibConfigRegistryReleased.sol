@@ -135,6 +135,14 @@ import {
     DEPENDENCIES as ConfigRegistry_0_1_37_DEPENDENCIES
 } from "../generated/0_1_37/ConfigRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as ConfigRegistry_0_1_38_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as ConfigRegistry_0_1_38_BYTECODE_HASH,
+    CREATION_CODE as ConfigRegistry_0_1_38_CREATION_CODE,
+    RUNTIME_CODE as ConfigRegistry_0_1_38_RUNTIME_CODE,
+    DEPENDENCIES as ConfigRegistry_0_1_38_DEPENDENCIES
+} from "../generated/0_1_38/ConfigRegistry.sol";
+
 /// @title LibConfigRegistryReleased
 /// @notice Every frozen release of `ConfigRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -155,7 +163,7 @@ library LibConfigRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](16);
+        DeploySuite[] memory suites = new DeploySuite[](17);
         suites[0] = DeploySuite({
             suite: "config-registry@0_1_19",
             creationCode: ConfigRegistry_0_1_19_CREATION_CODE,
@@ -344,6 +352,18 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_37_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_37_DEPENDENCIES, (DeployDependency[])),
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            networks: new string[](0),
+            describedByMeta: ""
+        });
+        suites[16] = DeploySuite({
+            suite: "config-registry@0_1_38",
+            creationCode: ConfigRegistry_0_1_38_CREATION_CODE,
+            storedDeployedAddress: ConfigRegistry_0_1_38_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ConfigRegistry_0_1_38_BYTECODE_HASH,
+            storedRuntimeCode: ConfigRegistry_0_1_38_RUNTIME_CODE,
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
+            dependencies: abi.decode(ConfigRegistry_0_1_38_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
             networks: new string[](0),
             describedByMeta: ""
