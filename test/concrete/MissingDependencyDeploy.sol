@@ -8,6 +8,7 @@ import {
     DeployDependency,
     DeployDeclaration,
     DeploySuite,
+    ExternalDeployment,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -47,6 +48,10 @@ contract MissingDependencyDeploy is RainDeployBroadcast {
         LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.addReleased(d, declaredReleased());
         LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        d.externalDeployments = new ExternalDeployment[](1);
+        d.externalDeployments[0] = ExternalDeployment({
+            deployedAddress: ABSENT_DEPENDENCY, codeHash: keccak256(ABSENT_DEPENDENCY_RUNTIME_CODE)
+        });
         return d;
     }
 

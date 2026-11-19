@@ -182,8 +182,8 @@ library LibMockCreate2Mechanism {
         }
     }
 
-    function etchFactory(Vm vm, DeploySuite memory suite) internal {
-        LibRainDeploy.etchDependencies(vm, suite.dependencies);
+    function etchFactory(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite);
         vm.etch(decode(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
 
@@ -233,7 +233,7 @@ library LibMockCreate2Mechanism {
         internal
         returns (address[] memory)
     {
-        etchFactory(vm, suite);
+        etchFactory(d, vm, suite);
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
         address[] memory deployed = new address[](chainIds.length);
         MockCreate2Mechanism memory mechanism = decode(suite);
@@ -254,7 +254,7 @@ library LibMockCreate2Mechanism {
     }
 
     function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        etchFactory(vm, suite);
+        etchFactory(d, vm, suite);
         deployAt(vm, suite, salt(suite, block.chainid), deployedAddress(d, suite, block.chainid));
     }
 

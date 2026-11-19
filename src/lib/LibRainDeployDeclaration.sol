@@ -2,14 +2,21 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+
 import {
+    DependencyCycle,
     DeployCandidate,
     DeployDeclaration,
     DeployMechanismHandler,
     DeploySuite,
+    DuplicateDeploySuite,
     DuplicateMechanism,
+    ExternalDeployment,
+    InvalidDeploySuiteKey,
     MechanismUnclaimed,
     NoDeployCandidates,
+    UnknownDependency,
     UnqualifiedCandidateArtifactPath
 } from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
@@ -313,6 +320,162 @@ library LibRainDeployDeclaration {
             candidate = abi.decode(abi.encode(suite), (DeploySuite));
         }
         addUnrecordedNetworks(d, suite, candidate, chainIds);
+    }
+
+    /// Refuses `InvalidDeploySuiteKey` for a key outside the registry's alphabet.
+    function checkSuiteKey(uint256 index, string memory suite) internal pure {
+        bytes memory key = bytes(suite);
+        // Where the tag starts, and zero until an `@` is seen. Zero is not a
+        // position a tag can start at, because an `@` opening the key leaves
+        // the name half empty and is refused below.
+        uint256 tagStart = 0;
+
+        for (uint256 i = 0; i < key.length; i++) {
+            bytes1 char = key[i];
+            if (char == "@") {
+                if (i == 0 || tagStart != 0) {
+                    revert InvalidDeploySuiteKey(index, suite);
+                }
+                tagStart = i + 1;
+            } else {
+                bool nameAlphabet = (char >= "a" && char <= "z") || char == "-";
+                bool tagAlphabet = (char >= "0" && char <= "9") || char == "_";
+                if (!(nameAlphabet || (tagStart != 0 && tagAlphabet))) {
+                    revert InvalidDeploySuiteKey(index, suite);
+                }
+            }
+        }
+
+        // The empty key and a trailing at sign: the loop only refuses bytes that are there.
+        if (tagStart == key.length) {
+            revert InvalidDeploySuiteKey(index, suite);
+        }
+    }
+
+    /// The released suites then a copy of each candidate snapshot, refusing an invalid or repeated key.
+    function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory released = d.released;
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
+
+        DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
+        for (uint256 i = 0; i < released.length; i++) {
+            suites[i] = released[i];
+        }
+        for (uint256 i = 0; i < candidates.length; i++) {
+            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
+        }
+
+        for (uint256 i = 0; i < suites.length; i++) {
+            checkSuiteKey(i, suites[i].suite);
+            for (uint256 j = i + 1; j < suites.length; j++) {
+                if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
+                    revert DuplicateDeploySuite(suites[i].suite);
+                }
+            }
+        }
+
+        return suites;
+    }
+
+    /// The indexes of every suite at nonzero `dependency` and of every external deployment at it, refusing
+    /// `UnknownDependency` naming `declaring` where there is neither.
+    function resolveDependency(
+        DeploySuite[] memory suites,
+        ExternalDeployment[] memory externals,
+        string memory declaring,
+        address dependency
+    ) internal pure returns (uint256[] memory, uint256[] memory) {
+        uint256[] memory suiteIndexes = new uint256[](suites.length);
+        uint256 suiteCount = 0;
+        if (dependency != address(0)) {
+            for (uint256 i = 0; i < suites.length; i++) {
+                if (suites[i].storedDeployedAddress == dependency) {
+                    suiteIndexes[suiteCount++] = i;
+                }
+            }
+        }
+        uint256[] memory externalIndexes = new uint256[](externals.length);
+        uint256 externalCount = 0;
+        for (uint256 i = 0; i < externals.length; i++) {
+            if (externals[i].deployedAddress == dependency) {
+                externalIndexes[externalCount++] = i;
+            }
+        }
+        if (suiteCount + externalCount == 0) {
+            revert UnknownDependency(declaring, dependency);
+        }
+        assembly ("memory-safe") {
+            mstore(suiteIndexes, suiteCount)
+            mstore(externalIndexes, externalCount)
+        }
+        return (suiteIndexes, externalIndexes);
+    }
+
+    /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
+    /// refusing `DependencyCycle` where they reach `suite`'s own nonzero address.
+    function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        pure
+        returns (DeployDependency[] memory)
+    {
+        DeploySuite[] memory suites = allSuites(d);
+        ExternalDeployment[] memory externals = d.externalDeployments;
+        DeployDependency[] memory closure = new DeployDependency[](0);
+        string[] memory declarers = new string[](0);
+        (closure, declarers) = appendNew(closure, declarers, suite, suite.dependencies, suite.suite);
+        for (uint256 i = 0; i < closure.length; i++) {
+            (uint256[] memory suiteIndexes,) =
+                resolveDependency(suites, externals, declarers[i], closure[i].deployedAddress);
+            for (uint256 j = 0; j < suiteIndexes.length; j++) {
+                DeploySuite memory reached = suites[suiteIndexes[j]];
+                (closure, declarers) = appendNew(closure, declarers, suite, reached.dependencies, reached.suite);
+            }
+        }
+        return closure;
+    }
+
+    function appendNew(
+        DeployDependency[] memory closure,
+        string[] memory declarers,
+        DeploySuite memory suite,
+        DeployDependency[] memory deps,
+        string memory declarer
+    ) private pure returns (DeployDependency[] memory, string[] memory) {
+        for (uint256 i = 0; i < deps.length; i++) {
+            address dependency = deps[i].deployedAddress;
+            if (dependency != address(0) && dependency == suite.storedDeployedAddress) {
+                revert DependencyCycle(suite.suite);
+            }
+            bool seen = false;
+            for (uint256 j = 0; j < closure.length; j++) {
+                if (closure[j].deployedAddress == dependency) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) {
+                DeployDependency[] memory grown = new DeployDependency[](closure.length + 1);
+                string[] memory grownDeclarers = new string[](closure.length + 1);
+                for (uint256 j = 0; j < closure.length; j++) {
+                    grown[j] = closure[j];
+                    grownDeclarers[j] = declarers[j];
+                }
+                grown[closure.length] = deps[i];
+                grownDeclarers[closure.length] = declarer;
+                closure = grown;
+                declarers = grownDeclarers;
+            }
+        }
+        return (closure, declarers);
+    }
+
+    /// Etches each dependency in `suite`'s dependency closure at its address.
+    function etchDependencyClosure(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+        DeployDependency[] memory closure = dependencyClosure(d, suite);
+        for (uint256 i = 0; i < closure.length; i++) {
+            vm.etch(closure[i].deployedAddress, closure[i].runtimeCode);
+        }
     }
 
     /// @param suites The suites to search.

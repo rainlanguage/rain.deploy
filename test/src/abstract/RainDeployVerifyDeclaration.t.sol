@@ -12,12 +12,11 @@ import {
     RuntimeCodeExceedsEip170,
     SuiteNotDispatchable,
     UndeclaredDependency,
-    UnknownDependency,
     UnreachedDependency,
     ZeroDependency
 } from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {RainDeployVerifyDeclaration} from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
-import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, UnknownDependency} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";

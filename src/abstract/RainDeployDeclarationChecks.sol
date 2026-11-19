@@ -13,6 +13,7 @@ import {
     ExternalDeployment,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 
 /// The dispatch workflow has no `suite` input with an `options` list.
 /// @param workflow The workflow path.
@@ -45,10 +46,6 @@ error UndeclaredDependency(string suite, address reached);
 /// @param suite The suite.
 /// @param dependency A declared dependency its code does not embed.
 error UnreachedDependency(string suite, address dependency);
-
-/// @param suite The suite.
-/// @param dependency A declared dependency that is neither a sibling nor an external deployment.
-error UnknownDependency(string suite, address dependency);
 
 /// @param suite The suite.
 /// @param dependency The dependency.
@@ -239,21 +236,13 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
             for (uint256 j = 0; j < deps.length; j++) {
                 address dependency = deps[j].deployedAddress;
                 bytes32 declared = keccak256(deps[j].runtimeCode);
-                bool known = false;
-                for (uint256 k = 0; k < suites.length; k++) {
-                    if (suites[k].storedDeployedAddress == dependency) {
-                        known = true;
-                        checkCodeHash(suites[i].suite, dependency, declared, suites[k].storedBytecodeHash);
-                    }
+                (uint256[] memory suiteIndexes, uint256[] memory externalIndexes) =
+                    LibRainDeployDeclaration.resolveDependency(suites, externals, suites[i].suite, dependency);
+                for (uint256 k = 0; k < suiteIndexes.length; k++) {
+                    checkCodeHash(suites[i].suite, dependency, declared, suites[suiteIndexes[k]].storedBytecodeHash);
                 }
-                for (uint256 k = 0; k < externals.length; k++) {
-                    if (externals[k].deployedAddress == dependency) {
-                        known = true;
-                        checkCodeHash(suites[i].suite, dependency, declared, externals[k].codeHash);
-                    }
-                }
-                if (!known) {
-                    revert UnknownDependency(suites[i].suite, dependency);
+                for (uint256 k = 0; k < externalIndexes.length; k++) {
+                    checkCodeHash(suites[i].suite, dependency, declared, externals[externalIndexes[k]].codeHash);
                 }
             }
         }

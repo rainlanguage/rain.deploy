@@ -2,9 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeployDeclaration, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite, ExternalDeployment} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
 import {MockCreate2Deploy} from "./MockCreate2Deploy.sol";
+
+/// @dev The external deployment a dependent release declares, holding `hex"00"`.
+address constant PRE_DEPLOY_CHECK_DEPENDENCY = address(0xdef);
 
 /// One `preDeployCheck` call, as the hook saw it.
 /// @param suite The suite's key.
@@ -29,6 +32,14 @@ error PreDeployCheckRefused(string network, uint256 forkChainId);
 contract PreDeployCheckRecordingDeploy is MockCreate2Deploy {
     PreDeployCheckCall[] internal sPreDeployChecks;
     uint256 internal sRefusedChainId;
+
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d = super.declaration();
+        d.externalDeployments = new ExternalDeployment[](1);
+        d.externalDeployments[0] =
+            ExternalDeployment({deployedAddress: PRE_DEPLOY_CHECK_DEPENDENCY, codeHash: keccak256(hex"00")});
+        return d;
+    }
 
     function refuseOn(uint256 chainId) external {
         sRefusedChainId = chainId;

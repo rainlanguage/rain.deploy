@@ -41,11 +41,8 @@ struct DeployDependency {
     /// The address that MUST already have code on a network before the suite
     /// declaring it is broadcast there.
     address deployedAddress;
-    /// The runtime code that MUST be at `deployedAddress`:
-    /// `RainDeployVerifyBase.deriveDeployment` etches exactly these bytes, so
-    /// a derived code hash is a function of them, and
-    /// `LibRainDeploy.deployToNetworks` holds the chain to them before it
-    /// broadcasts.
+    /// The runtime code that MUST be at `deployedAddress`, etched by local deploys and held against each forked
+    /// chain before a broadcast.
     bytes runtimeCode;
 }
 
@@ -263,15 +260,6 @@ library LibRainDeploy {
     function etchAndDeployZoltu(Vm vm, bytes memory creationCode) internal returns (address) {
         etchZoltuFactory(vm);
         return deployZoltu(creationCode);
-    }
-
-    /// Etches each dependency's runtime code at its address.
-    /// @param vm The Vm instance to etch with.
-    /// @param dependencies The dependencies.
-    function etchDependencies(Vm vm, DeployDependency[] memory dependencies) internal {
-        for (uint256 i = 0; i < dependencies.length; i++) {
-            vm.etch(dependencies[i].deployedAddress, dependencies[i].runtimeCode);
-        }
     }
 
     /// Derives the address the Zoltu factory deploys the given creation code
