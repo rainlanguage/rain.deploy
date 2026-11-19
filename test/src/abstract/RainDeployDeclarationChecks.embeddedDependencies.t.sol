@@ -32,6 +32,8 @@ bytes constant STOP = hex"00";
 
 address constant PER_NETWORK_ADDRESS = address(uint160(uint256(keccak256("rain.deploy.mock.per-network"))));
 
+address constant LATER_NETWORK_ADDRESS = address(uint160(uint256(keccak256("rain.deploy.mock.per-network.later"))));
+
 /// @title RainDeployDeclarationChecksEmbeddedDependenciesTest
 /// @notice A suite embeds an address its reachable creation code pushes or its mechanism data holds, and declares
 /// exactly the sibling and external deployments it embeds.
@@ -275,15 +277,30 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
 
     string constant PER_NETWORK = "mock-per-network";
 
-    function perNetworkChainId() internal pure returns (uint256) {
-        return LibRainDeploy.supportedNetworkConfigs()[0].chainId;
+    function perNetworkChainId(uint256 index) internal pure returns (uint256) {
+        return LibRainDeploy.supportedNetworkConfigs()[index].chainId;
     }
 
-    /// A per-network sibling whose stored address is the zero sentinel and whose mechanism records `recorded` on
-    /// the declaration's one network.
-    function perNetworkSuite(address recorded) internal pure returns (DeploySuite memory) {
-        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](1);
-        networks[0] = MockNetworkDeploy({chainId: perNetworkChainId(), data: "", deployedAddress: recorded});
+    function recording(address recorded) internal pure returns (address[] memory) {
+        address[] memory addresses = new address[](1);
+        addresses[0] = recorded;
+        return addresses;
+    }
+
+    function recording(address first, address later) internal pure returns (address[] memory) {
+        address[] memory addresses = new address[](2);
+        addresses[0] = first;
+        addresses[1] = later;
+        return addresses;
+    }
+
+    /// A per-network sibling whose stored address is the zero sentinel and whose mechanism records `recorded[i]` on
+    /// the declaration's `i`th network.
+    function perNetworkSuite(address[] memory recorded) internal pure returns (DeploySuite memory) {
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](recorded.length);
+        for (uint256 i = 0; i < recorded.length; i++) {
+            networks[i] = MockNetworkDeploy({chainId: perNetworkChainId(i), data: "", deployedAddress: recorded[i]});
+        }
         return DeploySuite({
             networks: new string[](0),
             suite: PER_NETWORK,
@@ -306,15 +323,17 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         });
     }
 
-    function perNetworkDeclarationWith(DeploySuite memory suite, address recorded)
+    function perNetworkDeclarationWith(DeploySuite memory suite, address[] memory recorded)
         internal
         pure
         returns (DeployDeclaration memory)
     {
         DeployDeclaration memory d = declarationWith(suite);
         LibMockCreate2Mechanism.extend(d);
-        string[] memory networks = new string[](1);
-        networks[0] = LibMockCreate2Mechanism.networkName(perNetworkChainId());
+        string[] memory networks = new string[](recorded.length);
+        for (uint256 i = 0; i < recorded.length; i++) {
+            networks[i] = LibMockCreate2Mechanism.networkName(perNetworkChainId(i));
+        }
         LibRainDeployDeclaration.setNetworks(d, networks);
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] =
@@ -323,7 +342,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         return d;
     }
 
-    function externalPerNetworkCheck(DeploySuite memory suite, address recorded) external view {
+    function externalPerNetworkCheck(DeploySuite memory suite, address[] memory recorded) external view {
         checkDependenciesAreTheEmbeddedDeployments(perNetworkDeclarationWith(suite, recorded));
     }
 
@@ -331,8 +350,20 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         bytes memory creationCode =
             bytes.concat(push(0, 32), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
         checkDependenciesAreTheEmbeddedDeployments(
-            perNetworkDeclarationWith(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS)
+            perNetworkDeclarationWith(suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS))
         );
+    }
+
+    function testPerNetworkReleaseRecordingItsCandidatesAddressesPasses() external view {
+        bytes memory creationCode =
+            bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
+        DeployDeclaration memory d =
+            perNetworkDeclarationWith(suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS));
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = perNetworkSuite(recording(PER_NETWORK_ADDRESS));
+        released[0].suite = "mock-per-network@0_0_1";
+        LibRainDeployDeclaration.addReleased(d, released);
+        checkDependenciesAreTheEmbeddedDeployments(d);
     }
 
     function testPushOfAPerNetworkSiblingAddressMustBeDeclared() external {
@@ -343,28 +374,61 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
             STOP
         );
         vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, PER_NETWORK_ADDRESS));
-        this.externalPerNetworkCheck(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS);
+        this.externalPerNetworkCheck(suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS));
     }
 
-    function externalCheckWithoutNetworks(DeploySuite memory suite) external view {
+    function testPushOfAPerNetworkSiblingAddressOnALaterNetworkMustBeDeclared() external {
+        bytes memory creationCode = bytes.concat(
+            pushAddress(LATER_NETWORK_ADDRESS),
+            pushAddress(MOCK_DEPLOYABLE_ADDRESS),
+            pushAddress(MOCK_EXTERNAL_ADDRESS),
+            STOP
+        );
+        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, LATER_NETWORK_ADDRESS));
+        this.externalPerNetworkCheck(
+            suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS, LATER_NETWORK_ADDRESS)
+        );
+    }
+
+    function externalCheckOver(DeploySuite memory suite, string[] memory networks) external view {
         DeployDeclaration memory d = declarationWith(suite);
-        LibRainDeployDeclaration.setNetworks(d, new string[](0));
+        d.networks = networks;
         checkDependenciesAreTheEmbeddedDeployments(d);
     }
 
     function testDeclarationWithoutNetworksIsRefused() external {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCheckWithoutNetworks(
+        this.externalCheckOver(
             suiteOf(
                 bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), both()
-            )
+            ),
+            new string[](0)
+        );
+    }
+
+    function testDeclarationNamingAnUncataloguedNetworkIsRefused() external {
+        string[] memory networks = new string[](1);
+        networks[0] = "not-a-network";
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "not-a-network"));
+        this.externalCheckOver(
+            suiteOf(
+                bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), both()
+            ),
+            networks
         );
     }
 
     function testZeroRecordedAddressIsRefused() external {
         bytes memory creationCode =
             bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
-        vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId()));
-        this.externalPerNetworkCheck(suiteOf(creationCode, both()), address(0));
+        vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId(0)));
+        this.externalPerNetworkCheck(suiteOf(creationCode, both()), recording(address(0)));
+    }
+
+    function testZeroRecordedAddressOnALaterNetworkIsRefused() external {
+        bytes memory creationCode =
+            bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
+        vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId(1)));
+        this.externalPerNetworkCheck(suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS, address(0)));
     }
 }
