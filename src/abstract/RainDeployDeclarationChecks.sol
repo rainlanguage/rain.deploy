@@ -238,6 +238,9 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
         returns (address[][] memory)
     {
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(d.networks));
+        if (chainIds.length == 0) {
+            revert LibRainDeploy.NoNetworks();
+        }
         address[][] memory deployments = new address[][](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
             deployments[i] = new address[](chainIds.length);

@@ -329,6 +329,19 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         this.externalPerNetworkCheck(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS);
     }
 
+    function externalCheckWithoutNetworks(DeploySuite memory suite) external view {
+        DeployDeclaration memory d = declarationWith(suite);
+        LibRainDeployDeclaration.setNetworks(d, new string[](0));
+        checkDependenciesAreTheEmbeddedDeployments(d);
+    }
+
+    function testDeclarationWithoutNetworksIsRefused() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckWithoutNetworks(
+            suiteOf(bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), both())
+        );
+    }
+
     function testZeroRecordedAddressIsRefused() external {
         bytes memory creationCode =
             bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
