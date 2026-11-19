@@ -284,7 +284,11 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
             dependencies: new DeployDependency[](0),
             mechanismData: LibMockCreate2Mechanism.encode(
                 MockCreate2Mechanism({
-                    factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: networks, root: ""
+                    factory: MOCK_CREATE2_FACTORY,
+                    salt: MOCK_CREATE2_SALT,
+                    perNetwork: true,
+                    networks: networks,
+                    root: ""
                 })
             ),
             describedByMeta: ""
@@ -313,9 +317,8 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
     }
 
     function testPerNetworkSiblingWithAZeroPushPasses() external view {
-        bytes memory creationCode = bytes.concat(
-            push(0, 32), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP
-        );
+        bytes memory creationCode =
+            bytes.concat(push(0, 32), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
         checkDependenciesAreTheEmbeddedDeployments(
             perNetworkDeclarationWith(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS)
         );
@@ -323,7 +326,10 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
 
     function testPushOfAPerNetworkSiblingAddressMustBeDeclared() external {
         bytes memory creationCode = bytes.concat(
-            pushAddress(PER_NETWORK_ADDRESS), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP
+            pushAddress(PER_NETWORK_ADDRESS),
+            pushAddress(MOCK_DEPLOYABLE_ADDRESS),
+            pushAddress(MOCK_EXTERNAL_ADDRESS),
+            STOP
         );
         vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, PER_NETWORK_ADDRESS));
         this.externalPerNetworkCheck(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS);
@@ -338,7 +344,9 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
     function testDeclarationWithoutNetworksIsRefused() external {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCheckWithoutNetworks(
-            suiteOf(bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), both())
+            suiteOf(
+                bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), both()
+            )
         );
     }
 
