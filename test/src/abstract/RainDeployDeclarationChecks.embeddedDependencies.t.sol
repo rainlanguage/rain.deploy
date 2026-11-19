@@ -463,9 +463,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         bytes32 expected = perNetworkSuite(recorded).storedBytecodeHash;
         assertTrue(keccak256(STOP) != expected);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                DependencyRuntimeCodeMismatch.selector, SUITE, dependency, keccak256(STOP), expected
-            )
+            abi.encodeWithSelector(DependencyRuntimeCodeMismatch.selector, SUITE, dependency, keccak256(STOP), expected)
         );
         this.externalPerNetworkRuntimeCodeCheck(dependingOn(dependency, STOP), recorded);
     }
