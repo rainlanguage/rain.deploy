@@ -12,7 +12,8 @@ import {
 import {
     UndeclaredDependency,
     UnreachedDependency,
-    ZeroRecordedAddress
+    ZeroRecordedAddress,
+    ZeroStoredAddress
 } from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
@@ -355,5 +356,13 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
             bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
         vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId()));
         this.externalPerNetworkCheck(suiteOf(creationCode, both()), address(0));
+    }
+
+    function testUnclaimedSuiteWithZeroStoredAddressIsRefused() external {
+        DeploySuite memory suite = suiteOf(STOP, new DeployDependency[](0));
+        suite.mechanismData = mechanismNaming(MOCK_EXTERNAL_ADDRESS);
+        suite.storedDeployedAddress = address(0);
+        vm.expectRevert(abi.encodeWithSelector(ZeroStoredAddress.selector, SUITE));
+        this.externalCheck(suite);
     }
 }
