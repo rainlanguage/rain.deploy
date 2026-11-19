@@ -7,7 +7,6 @@ import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySu
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
-import {LibReleasedSuites} from "../../../src/lib/LibReleasedSuites.sol";
 
 /// @title RegistryDeploySuitesRetiredNetworksTest
 /// @notice The retired address registry releases and the releases cut before `zerog` name their own networks, so a
@@ -19,15 +18,7 @@ contract RegistryDeploySuitesRetiredNetworksTest is Test, RegistryDeploySuites {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         LibRainDeployDeclaration.setNetworks(d, networks);
-
-        DeploySuite[] memory record = LibReleasedSuites.releasedSuites();
-        DeploySuite[] memory released = new DeploySuite[](record.length + 1);
-        for (uint256 i = 0; i < record.length; i++) {
-            released[i] = record[i];
-        }
-        released[record.length] = abi.decode(abi.encode(record[record.length - 1]), (DeploySuite));
-        released[record.length].suite = "config-registry@0_1_36";
-        LibRainDeployDeclaration.addReleased(d, narrowReleasedNetworks(released));
+        LibRainDeployDeclaration.addReleased(d, registryReleasedSuites());
 
         string[] memory retiredNetworks = addressRegistryNetworks();
         string[] memory before = networksBeforeZerog();
@@ -49,6 +40,6 @@ contract RegistryDeploySuitesRetiredNetworksTest is Test, RegistryDeploySuites {
         }
         assertGt(retired, 1);
         assertGt(beforeZerog, 1);
-        assertEq(others, 1);
+        assertGt(others, 1);
     }
 }

@@ -1249,7 +1249,7 @@ forge-known explorer, so its entry carries its chainscan url, which speaks the
 Etherscan API and ignores the key (forge still needs a non-empty one, so CI
 passes `PLACEHOLDER`).
 
-### Upgrading from 0.1.35
+### Upgrading from 0.1.37
 
 The catalogue gains `zerog` (0G, 16661), so `extend()` declares it and every
 release `addReleased` fills is required there. A repo that does not deploy to 0G
