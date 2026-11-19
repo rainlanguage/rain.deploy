@@ -202,8 +202,8 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every sibling or external deployment a suite embeds MUST be a declared
     /// dependency, and every declared dependency MUST be embedded. A sibling's
-    /// deployments are the addresses its mechanism records on each of
-    /// `d.networks`, none of which MAY be zero.
+    /// deployments are the addresses its mechanism records on each of its
+    /// networks, none of which MAY be zero.
     function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
@@ -231,28 +231,50 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @param suites Every suite of `d`.
-    /// @return The address each suite's mechanism records on each chain of `d.networks`.
+    /// @return The address each suite's mechanism records on each of its networks, or, for a suite whose mechanism
+    /// `d` does not claim, its nonzero stored address as the other declaration checks read it.
     function siblingDeployments(DeployDeclaration memory d, DeploySuite[] memory suites)
         internal
         view
         returns (address[][] memory)
     {
-        uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(d.networks));
-        if (chainIds.length == 0) {
+        if (LibRainDeploy.declaredNetworkConfigs(d.networks).length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
         address[][] memory deployments = new address[][](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
-            deployments[i] = new address[](chainIds.length);
+            if (!claimsMechanism(d, suites[i])) {
+                address stored = suites[i].storedDeployedAddress;
+                deployments[i] = new address[](stored == address(0) ? 0 : 1);
+                if (stored != address(0)) {
+                    deployments[i][0] = stored;
+                }
+                continue;
+            }
+            uint256[] memory chainIds = suiteChainIds(suites[i]);
+            deployments[i] = recordedAddresses(d, suites[i]);
             for (uint256 j = 0; j < chainIds.length; j++) {
-                address deployment = recordedAddress(d, suites[i], chainIds[j]);
-                if (deployment == address(0)) {
+                if (deployments[i][j] == address(0)) {
                     revert ZeroRecordedAddress(suites[i].suite, chainIds[j]);
                 }
-                deployments[i][j] = deployment;
             }
         }
         return deployments;
+    }
+
+    /// @param suite The suite.
+    /// @return Whether one of `d.mechanisms` claims its `mechanismData`.
+    function claimsMechanism(DeployDeclaration memory d, DeploySuite memory suite) internal pure returns (bool) {
+        if (suite.mechanismData.length < 0x20) {
+            return false;
+        }
+        bytes32 id = mechanismIdOf(suite);
+        for (uint256 i = 0; i < d.mechanisms.length; i++) {
+            if (d.mechanisms[i].id == id) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// @param addresses The addresses.
