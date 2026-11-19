@@ -9,7 +9,9 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
+import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
+import {LibRainDeploySnapshot, UnreleasableVersion} from "../lib/LibRainDeploySnapshot.sol";
 import {LibRainDeployZoltuMechanism} from "../lib/LibRainDeployZoltuMechanism.sol";
 import {
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
@@ -81,8 +83,8 @@ struct ParameterisedContract {
 /// emits it from the frozen record. Nothing about a release is written here.
 abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// This repo's declaration: every Rain network, Zoltu, the generated releases with each `AddressRegistry`
-    /// release required only on `addressRegistryNetworks()`, `registryCandidates()` and `parameterisedContractNames()` as
-    /// the frozen code records.
+    /// release and each release up to `LAST_RELEASE_BEFORE_ZEROG` required only on `networksBeforeZerog()`,
+    /// `registryCandidates()` and `parameterisedContractNames()` as the frozen code records.
     /// @return The declaration.
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory declared;
@@ -97,11 +99,22 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// The suite key of the retired `AddressRegistry` releases.
     string constant ADDRESS_REGISTRY_SUITE = "address-registry";
 
+    /// The newest release cut before `zerog` joined the roster.
+    string constant LAST_RELEASE_BEFORE_ZEROG = "0_1_35";
+
     /// The networks the `AddressRegistry` releases were live on when it was
     /// retired. Frozen: no candidate carries its bytecode, so nothing can
     /// deploy it to a network added since.
     /// @return The network names.
     function addressRegistryNetworks() internal pure returns (string[] memory) {
+        return networksBeforeZerog();
+    }
+
+    /// The roster every release up to `LAST_RELEASE_BEFORE_ZEROG` was cut and
+    /// deployed for. Frozen: those releases are not on 0G, so only the
+    /// candidates and the releases cut after `zerog` joined are required there.
+    /// @return The network names.
+    function networksBeforeZerog() internal pure returns (string[] memory) {
         string[] memory networks = new string[](9);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.BASE;
@@ -132,15 +145,47 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// libs written from the generated list.
     ///
     /// The rolling `candidate/` snapshots are not releases.
-    /// @return The releases, each `AddressRegistry` one declaring `addressRegistryNetworks()`.
+    /// @return The releases, narrowed by `narrowReleasedNetworks`.
     function registryReleasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = LibReleasedSuites.releasedSuites();
+        return narrowReleasedNetworks(LibReleasedSuites.releasedSuites());
+    }
+
+    /// Sets each `AddressRegistry` release to `addressRegistryNetworks()` and
+    /// each other release up to `LAST_RELEASE_BEFORE_ZEROG` to
+    /// `networksBeforeZerog()`, leaving later releases to the declaration's
+    /// networks.
+    /// @param released The releases, mutated.
+    /// @return `released`.
+    function narrowReleasedNetworks(DeploySuite[] memory released) internal pure returns (DeploySuite[] memory) {
         for (uint256 i = 0; i < released.length; i++) {
             if (keccak256(bytes(suiteKeyName(released[i].suite))) == keccak256(bytes(ADDRESS_REGISTRY_SUITE))) {
                 released[i].networks = addressRegistryNetworks();
+            } else if (releasedBeforeZerog(released[i].suite)) {
+                released[i].networks = networksBeforeZerog();
             }
         }
         return released;
+    }
+
+    /// Whether a suite key's tag is at or before `LAST_RELEASE_BEFORE_ZEROG`,
+    /// ordered by `LibRainDeploySnapshot.tagPrecedes`. A key with no tag is
+    /// not, and a tag that is not `isTag` is refused.
+    /// @param suite The suite key.
+    /// @return True if the release was cut before `zerog` joined the roster.
+    function releasedBeforeZerog(string memory suite) internal pure returns (bool) {
+        bytes memory key = bytes(suite);
+        uint256 start = bytes(suiteKeyName(suite)).length + 1;
+        if (start > key.length) {
+            return false;
+        }
+        bytes memory tag = new bytes(key.length - start);
+        for (uint256 i = 0; i < tag.length; i++) {
+            tag[i] = key[start + i];
+        }
+        if (!LibRainDeploySnapshot.isTag(string(tag))) {
+            revert UnreleasableVersion(string(tag));
+        }
+        return !LibRainDeploySnapshot.tagPrecedes(StdConstants.VM, LAST_RELEASE_BEFORE_ZEROG, string(tag));
     }
 
     /// One entry per contract this repo deploys. A third deployed contract

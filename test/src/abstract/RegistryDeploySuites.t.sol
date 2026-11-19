@@ -5,7 +5,9 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
-import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploySnapshot, UnreleasableVersion} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibReleasedSuites} from "../../../src/lib/LibReleasedSuites.sol";
 
 /// @title RegistryDeploySuitesTest
 /// @notice The fields of this repo's declaration that nothing derives and no
@@ -339,22 +341,91 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     }
 
     /// Every retired address registry release is required on exactly the
-    /// networks it was live on at retirement; every other suite on every
-    /// declared network.
-    function testOnlyRetiredAddressRegistryReleasesAreNarrowed() external pure {
+    /// networks it was live on at retirement, every other release cut before
+    /// `zerog` joined on the networks before it, and every candidate on every
+    /// declared network, `zerog` included.
+    function testReleasesAreNarrowedToTheNetworksTheyWereCutFor() external pure {
         DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
         uint256 retired = 0;
+        uint256 beforeZerog = 0;
         for (uint256 i = 0; i < suites.length; i++) {
             if (keccak256(bytes(suiteKeyName(suites[i].suite))) == keccak256(bytes(ADDRESS_REGISTRY_SUITE))) {
                 retired++;
                 assertNetworks(suites[i], addressRegistryNetworks());
+            } else if (releasedBeforeZerog(suites[i].suite)) {
+                beforeZerog++;
+                assertNetworks(suites[i], networksBeforeZerog());
             } else {
                 assertNetworks(suites[i], d.networks);
             }
         }
         assertEq(suiteByName(d, "address-registry@0_1_18").networks.length, 9);
         assertEq(suiteByName(d, "address-registry@0_1_7").networks.length, 9);
+        assertEq(suiteByName(d, "config-registry@0_1_35").networks.length, 9);
+        assertEq(suiteByName(d, "migration-registry@0_1_7").networks.length, 9);
+        assertEq(d.networks.length, 10);
+        assertEq(d.networks[9], LibRainDeploy.ZEROG);
         assertGt(retired, 1);
+        assertGt(beforeZerog, 1);
+    }
+
+    /// The roster before `zerog` is the supported roster without it.
+    function testNetworksBeforeZerogAreTheSupportedNetworksWithoutZerog() external pure {
+        string[] memory before = networksBeforeZerog();
+        string[] memory supported = LibRainDeploy.supportedNetworks();
+        assertEq(before.length + 1, supported.length);
+        for (uint256 i = 0; i < before.length; i++) {
+            assertEq(before[i], supported[i]);
+        }
+        assertEq(supported[before.length], LibRainDeploy.ZEROG);
+    }
+
+    /// A release is before `zerog` up to and including
+    /// `LAST_RELEASE_BEFORE_ZEROG`, compared by number rather than text, and
+    /// an untagged key is not.
+    function testReleasedBeforeZerogBoundary() external pure {
+        assertTrue(releasedBeforeZerog("config-registry@0_1_35"));
+        assertTrue(releasedBeforeZerog("migration-registry@0_1_7"));
+        assertTrue(releasedBeforeZerog("migration-registry@0_0_99"));
+        assertFalse(releasedBeforeZerog("config-registry@0_1_36"));
+        assertFalse(releasedBeforeZerog("config-registry@0_1_100"));
+        assertFalse(releasedBeforeZerog("config-registry@0_2_0"));
+        assertFalse(releasedBeforeZerog("migration-registry@1_0_0"));
+        assertFalse(releasedBeforeZerog("config-registry"));
+    }
+
+    /// A wrapper so `releasedBeforeZerog` reverts at a depth
+    /// `vm.expectRevert` reaches.
+    /// @param suite The suite key.
+    /// @return Whether the release was cut before `zerog` joined the roster.
+    function externalReleasedBeforeZerog(string memory suite) external pure returns (bool) {
+        return releasedBeforeZerog(suite);
+    }
+
+    /// A key whose tag is not `isTag` is refused rather than ordered, so a
+    /// misspelled tag cannot land on either side of the cutoff.
+    function testReleasedBeforeZerogRefusesANonTag() external {
+        string[5] memory tags = ["0_1", "0_1_3a", "0_1_35_1", "0_01_7", ""];
+        for (uint256 i = 0; i < tags.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, tags[i]));
+            this.externalReleasedBeforeZerog(string.concat("config-registry@", tags[i]));
+        }
+    }
+
+    /// No release ships `zerog` yet, so `LAST_RELEASE_BEFORE_ZEROG` names the
+    /// newest release. The first release cut with `zerog` in its roster
+    /// changes this to assert that release is required on `zerog`.
+    function testLastReleaseBeforeZerogIsTheNewestRelease() external pure {
+        DeploySuite[] memory released = LibReleasedSuites.releasedSuites();
+        uint256 atCutoff = 0;
+        for (uint256 i = 0; i < released.length; i++) {
+            assertTrue(releasedBeforeZerog(released[i].suite), released[i].suite);
+            string memory atCutoffKey = string.concat(suiteKeyName(released[i].suite), "@", LAST_RELEASE_BEFORE_ZEROG);
+            if (keccak256(bytes(released[i].suite)) == keccak256(bytes(atCutoffKey))) {
+                atCutoff++;
+            }
+        }
+        assertGt(atCutoff, 0, "no release at LAST_RELEASE_BEFORE_ZEROG");
     }
 }
