@@ -279,9 +279,10 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every declared dependency MUST be a sibling or external deployment, with
     /// the runtime code that declaration records.
-    function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal pure {
+    function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
+        address[][] memory siblings = siblingDeployments(d, suites);
         for (uint256 i = 0; i < suites.length; i++) {
             DeployDependency[] memory deps = suites[i].dependencies;
             for (uint256 j = 0; j < deps.length; j++) {
@@ -289,7 +290,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
                 bytes32 declared = keccak256(deps[j].runtimeCode);
                 bool known = false;
                 for (uint256 k = 0; k < suites.length; k++) {
-                    if (suites[k].storedDeployedAddress == dependency) {
+                    if (holds(siblings[k], dependency)) {
                         known = true;
                         checkCodeHash(suites[i].suite, dependency, declared, suites[k].storedBytecodeHash);
                     }
