@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibExtrospectBytecode} from "rain-extrospection-0.1.31/src/lib/LibExtrospectBytecode.sol";
+import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 
 import {
     DeployCandidate,
@@ -37,6 +38,10 @@ error ZeroDependency(string suite);
 /// @param suite The suite.
 /// @param dependency The dependency it declares more than once.
 error RepeatedDependency(string suite, address dependency);
+
+/// @param suite The sibling.
+/// @param chainId The chain its mechanism records the zero address on.
+error ZeroRecordedAddress(string suite, uint256 chainId);
 
 /// @param suite The suite.
 /// @param reached A sibling or external deployment its code embeds but it does not declare.
@@ -196,14 +201,19 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every sibling or external deployment a suite embeds MUST be a declared
-    /// dependency, and every declared dependency MUST be embedded.
-    function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal pure {
+    /// dependency, and every declared dependency MUST be embedded. A sibling's
+    /// deployments are the addresses its mechanism records on each of
+    /// `d.networks`, none of which MAY be zero.
+    function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
+        address[][] memory siblings = siblingDeployments(d, suites);
         for (uint256 i = 0; i < suites.length; i++) {
             uint256[] memory constants = LibExtrospectBytecode.scanConstantsReachableInBytecode(suites[i].creationCode);
-            for (uint256 j = 0; j < suites.length; j++) {
-                checkDeclaredIfEmbedded(suites[i], constants, suites[j].storedDeployedAddress);
+            for (uint256 j = 0; j < siblings.length; j++) {
+                for (uint256 k = 0; k < siblings[j].length; k++) {
+                    checkDeclaredIfEmbedded(suites[i], constants, siblings[j][k]);
+                }
             }
             for (uint256 j = 0; j < externals.length; j++) {
                 checkDeclaredIfEmbedded(suites[i], constants, externals[j].deployedAddress);
@@ -215,6 +225,28 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
                 }
             }
         }
+    }
+
+    /// @param suites Every suite of `d`.
+    /// @return The address each suite's mechanism records on each chain of `d.networks`.
+    function siblingDeployments(DeployDeclaration memory d, DeploySuite[] memory suites)
+        internal
+        view
+        returns (address[][] memory)
+    {
+        uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(d.networks));
+        address[][] memory deployments = new address[][](suites.length);
+        for (uint256 i = 0; i < suites.length; i++) {
+            deployments[i] = new address[](chainIds.length);
+            for (uint256 j = 0; j < chainIds.length; j++) {
+                address deployment = recordedAddress(d, suites[i], chainIds[j]);
+                if (deployment == address(0)) {
+                    revert ZeroRecordedAddress(suites[i].suite, chainIds[j]);
+                }
+                deployments[i][j] = deployment;
+            }
+        }
+        return deployments;
     }
 
     /// @param suite The suite.

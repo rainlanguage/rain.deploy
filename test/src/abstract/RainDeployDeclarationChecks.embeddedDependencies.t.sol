@@ -47,17 +47,17 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         return d;
     }
 
-    function externalCheck(DeploySuite memory suite) external pure {
+    function externalCheck(DeploySuite memory suite) external view {
         checkDependenciesAreTheEmbeddedDeployments(declarationWith(suite));
     }
 
-    function externalCheckBeforeItsSibling(DeploySuite memory suite) external pure {
+    function externalCheckBeforeItsSibling(DeploySuite memory suite) external view {
         DeployDeclaration memory d = declarationWith(suite);
         (d.candidates[0], d.candidates[1]) = (d.candidates[1], d.candidates[0]);
         checkDependenciesAreTheEmbeddedDeployments(d);
     }
 
-    function externalCheckAmong(DeploySuite memory suite, ExternalDeployment[] memory externals) external pure {
+    function externalCheckAmong(DeploySuite memory suite, ExternalDeployment[] memory externals) external view {
         DeployDeclaration memory d = declarationWith(suite);
         d.externalDeployments = externals;
         checkDependenciesAreTheEmbeddedDeployments(d);
@@ -148,7 +148,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         this.externalCheck(suite);
     }
 
-    function testDeclaredPushedDeploymentsPass() external pure {
+    function testDeclaredPushedDeploymentsPass() external view {
         checkDependenciesAreTheEmbeddedDeployments(declaration());
     }
 
@@ -222,7 +222,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         return creationCode;
     }
 
-    function testDataContractDataNeedsNoDeclaration() external pure {
+    function testDataContractDataNeedsNoDeclaration() external view {
         checkDependenciesAreTheEmbeddedDeployments(
             declarationWith(suiteOf(dataContractPushingBoth(), new DeployDependency[](0)))
         );
@@ -239,7 +239,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkUndeclared(suite, MOCK_EXTERNAL_ADDRESS);
     }
 
-    function testMechanismDataReachesADeclaredDependency() external pure {
+    function testMechanismDataReachesADeclaredDependency() external view {
         DeploySuite memory suite = suiteOf(STOP, only(externalDependency()));
         suite.mechanismData = mechanismNaming(MOCK_EXTERNAL_ADDRESS);
         checkDependenciesAreTheEmbeddedDeployments(declarationWith(suite));
