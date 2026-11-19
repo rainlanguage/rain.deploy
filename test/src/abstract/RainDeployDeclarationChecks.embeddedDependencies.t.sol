@@ -10,6 +10,7 @@ import {
     ExternalDeployment
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
+    DependencyRuntimeCodeMismatch,
     UndeclaredDependency,
     UnreachedDependency,
     ZeroRecordedAddress
@@ -430,5 +431,50 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
             bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
         vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId(1)));
         this.externalPerNetworkCheck(suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS, address(0)));
+    }
+
+    function dependingOn(address dependency, bytes memory runtimeCode) internal pure returns (DeploySuite memory) {
+        return suiteOf(STOP, only(DeployDependency({deployedAddress: dependency, runtimeCode: runtimeCode})));
+    }
+
+    function externalPerNetworkRuntimeCodeCheck(DeploySuite memory suite, address[] memory recorded) external view {
+        checkDependencyRuntimeCodeIsKnown(perNetworkDeclarationWith(suite, recorded));
+    }
+
+    function testPerNetworkSiblingDependencyWithItsRuntimeCodeIsKnown() external view {
+        address[] memory recorded = recording(PER_NETWORK_ADDRESS);
+        checkDependencyRuntimeCodeIsKnown(
+            perNetworkDeclarationWith(
+                dependingOn(PER_NETWORK_ADDRESS, perNetworkSuite(recorded).storedRuntimeCode), recorded
+            )
+        );
+    }
+
+    function testPerNetworkSiblingDependencyOnALaterNetworkWithItsRuntimeCodeIsKnown() external view {
+        address[] memory recorded = recording(PER_NETWORK_ADDRESS, LATER_NETWORK_ADDRESS);
+        checkDependencyRuntimeCodeIsKnown(
+            perNetworkDeclarationWith(
+                dependingOn(LATER_NETWORK_ADDRESS, perNetworkSuite(recorded).storedRuntimeCode), recorded
+            )
+        );
+    }
+
+    function checkPerNetworkRuntimeCodeMismatch(address dependency, address[] memory recorded) internal {
+        bytes32 expected = perNetworkSuite(recorded).storedBytecodeHash;
+        assertTrue(keccak256(STOP) != expected);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DependencyRuntimeCodeMismatch.selector, SUITE, dependency, keccak256(STOP), expected
+            )
+        );
+        this.externalPerNetworkRuntimeCodeCheck(dependingOn(dependency, STOP), recorded);
+    }
+
+    function testPerNetworkSiblingDependencyWithOtherRuntimeCodeMismatches() external {
+        checkPerNetworkRuntimeCodeMismatch(PER_NETWORK_ADDRESS, recording(PER_NETWORK_ADDRESS));
+    }
+
+    function testPerNetworkSiblingDependencyOnALaterNetworkWithOtherRuntimeCodeMismatches() external {
+        checkPerNetworkRuntimeCodeMismatch(LATER_NETWORK_ADDRESS, recording(PER_NETWORK_ADDRESS, LATER_NETWORK_ADDRESS));
     }
 }
