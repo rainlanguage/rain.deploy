@@ -43,9 +43,6 @@ error RepeatedDependency(string suite, address dependency);
 /// @param chainId The chain its mechanism records the zero address on.
 error ZeroRecordedAddress(string suite, uint256 chainId);
 
-/// @param suite A sibling whose mechanism the declaration does not claim and whose stored address is zero.
-error ZeroStoredAddress(string suite);
-
 /// @param suite The suite.
 /// @param reached A sibling or external deployment its code embeds but it does not declare.
 error UndeclaredDependency(string suite, address reached);
@@ -234,8 +231,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @param suites Every suite of `d`.
-    /// @return The address each suite's mechanism records on each of its networks, or, for a suite whose mechanism
-    /// `d` does not claim, its stored address as the other declaration checks read it, refusing zero.
+    /// @return The address each suite's mechanism records on each of its networks.
     function siblingDeployments(DeployDeclaration memory d, DeploySuite[] memory suites)
         internal
         view
@@ -246,14 +242,6 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
         }
         address[][] memory deployments = new address[][](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
-            if (!claimsMechanism(d, suites[i])) {
-                if (suites[i].storedDeployedAddress == address(0)) {
-                    revert ZeroStoredAddress(suites[i].suite);
-                }
-                deployments[i] = new address[](1);
-                deployments[i][0] = suites[i].storedDeployedAddress;
-                continue;
-            }
             uint256[] memory chainIds = suiteChainIds(suites[i]);
             deployments[i] = recordedAddresses(d, suites[i]);
             for (uint256 j = 0; j < chainIds.length; j++) {
@@ -263,21 +251,6 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
             }
         }
         return deployments;
-    }
-
-    /// @param suite The suite.
-    /// @return Whether one of `d.mechanisms` claims its `mechanismData`.
-    function claimsMechanism(DeployDeclaration memory d, DeploySuite memory suite) internal pure returns (bool) {
-        if (suite.mechanismData.length < 0x20) {
-            return false;
-        }
-        bytes32 id = mechanismIdOf(suite);
-        for (uint256 i = 0; i < d.mechanisms.length; i++) {
-            if (d.mechanisms[i].id == id) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /// @param addresses The addresses.
