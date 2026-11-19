@@ -212,7 +212,10 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
             uint256[] memory constants = LibExtrospectBytecode.scanConstantsReachableInBytecode(suites[i].creationCode);
             for (uint256 j = 0; j < siblings.length; j++) {
                 for (uint256 k = 0; k < siblings[j].length; k++) {
-                    checkDeclaredIfEmbedded(suites[i], constants, siblings[j][k]);
+                    // A per-network mechanism's data holds the suite's own addresses, which are not its dependencies.
+                    if (!holds(siblings[i], siblings[j][k])) {
+                        checkDeclaredIfEmbedded(suites[i], constants, siblings[j][k]);
+                    }
                 }
             }
             for (uint256 j = 0; j < externals.length; j++) {
@@ -247,6 +250,18 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
             }
         }
         return deployments;
+    }
+
+    /// @param addresses The addresses.
+    /// @param needle The address.
+    /// @return Whether `addresses` holds `needle`.
+    function holds(address[] memory addresses, address needle) internal pure returns (bool) {
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i] == needle) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// @param suite The suite.

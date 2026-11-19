@@ -9,17 +9,28 @@ import {
     DeploySuite,
     ExternalDeployment
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {UndeclaredDependency, UnreachedDependency} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
+import {
+    UndeclaredDependency,
+    UnreachedDependency,
+    ZeroRecordedAddress
+} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MOCK_EXTERNAL_RUNTIME_CODE, ReachingDeploySuites} from "../../abstract/ReachingDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
-import {LibMockCreate2Mechanism, MOCK_CREATE2_SALT, MockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
+import {
+    LibMockCreate2Mechanism,
+    MOCK_CREATE2_FACTORY,
+    MOCK_CREATE2_SALT,
+    MockCreate2Mechanism
+} from "../../lib/LibMockCreate2Mechanism.sol";
 import {MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {MOCK_DEPLOYABLE_ADDRESS, MOCK_EXTERNAL_ADDRESS} from "../../concrete/MockReachingDeployable.sol";
 
 bytes constant STOP = hex"00";
+
+address constant PER_NETWORK_ADDRESS = address(uint160(uint256(keccak256("rain.deploy.mock.per-network"))));
 
 /// @title RainDeployDeclarationChecksEmbeddedDependenciesTest
 /// @notice A suite embeds an address its reachable creation code pushes or its mechanism data holds, and declares
@@ -249,5 +260,79 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkUnreached(suiteOf(STOP, only(siblingDependency())), MOCK_DEPLOYABLE_ADDRESS);
         checkUnreached(suiteOf(STOP, only(externalDependency())), MOCK_EXTERNAL_ADDRESS);
         checkUnreached(suiteOf(bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), STOP), both()), MOCK_EXTERNAL_ADDRESS);
+    }
+
+    string constant PER_NETWORK = "mock-per-network";
+
+    function perNetworkChainId() internal pure returns (uint256) {
+        return LibRainDeploy.supportedNetworkConfigs()[0].chainId;
+    }
+
+    /// A per-network sibling whose stored address is the zero sentinel and whose mechanism records `recorded` on
+    /// the declaration's one network.
+    function perNetworkSuite(address recorded) internal pure returns (DeploySuite memory) {
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](1);
+        networks[0] = MockNetworkDeploy({chainId: perNetworkChainId(), data: "", deployedAddress: recorded});
+        return DeploySuite({
+            networks: new string[](0),
+            suite: PER_NETWORK,
+            creationCode: STOP,
+            storedDeployedAddress: address(0),
+            storedBytecodeHash: keccak256(""),
+            storedRuntimeCode: "",
+            artifactPath: "test/concrete/MockPerNetwork.sol:MockPerNetwork",
+            dependencies: new DeployDependency[](0),
+            mechanismData: LibMockCreate2Mechanism.encode(
+                MockCreate2Mechanism({
+                    factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: networks, root: ""
+                })
+            ),
+            describedByMeta: ""
+        });
+    }
+
+    function perNetworkDeclarationWith(DeploySuite memory suite, address recorded)
+        internal
+        pure
+        returns (DeployDeclaration memory)
+    {
+        DeployDeclaration memory d = declarationWith(suite);
+        LibMockCreate2Mechanism.extend(d);
+        string[] memory networks = new string[](1);
+        networks[0] = LibMockCreate2Mechanism.networkName(perNetworkChainId());
+        LibRainDeployDeclaration.setNetworks(d, networks);
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
+        candidates[0] =
+            DeployCandidate({snapshot: perNetworkSuite(recorded), unanchorableReason: "Hand-assembled bytecode."});
+        LibRainDeployDeclaration.addCandidates(d, candidates);
+        return d;
+    }
+
+    function externalPerNetworkCheck(DeploySuite memory suite, address recorded) external view {
+        checkDependenciesAreTheEmbeddedDeployments(perNetworkDeclarationWith(suite, recorded));
+    }
+
+    function testPerNetworkSiblingWithAZeroPushPasses() external view {
+        bytes memory creationCode = bytes.concat(
+            push(0, 32), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP
+        );
+        checkDependenciesAreTheEmbeddedDeployments(
+            perNetworkDeclarationWith(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS)
+        );
+    }
+
+    function testPushOfAPerNetworkSiblingAddressMustBeDeclared() external {
+        bytes memory creationCode = bytes.concat(
+            pushAddress(PER_NETWORK_ADDRESS), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP
+        );
+        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, PER_NETWORK_ADDRESS));
+        this.externalPerNetworkCheck(suiteOf(creationCode, both()), PER_NETWORK_ADDRESS);
+    }
+
+    function testZeroRecordedAddressIsRefused() external {
+        bytes memory creationCode =
+            bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
+        vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId()));
+        this.externalPerNetworkCheck(suiteOf(creationCode, both()), address(0));
     }
 }
