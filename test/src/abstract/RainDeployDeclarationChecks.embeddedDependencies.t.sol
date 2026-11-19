@@ -12,8 +12,7 @@ import {
 import {
     UndeclaredDependency,
     UnreachedDependency,
-    ZeroRecordedAddress,
-    ZeroStoredAddress
+    ZeroRecordedAddress
 } from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
@@ -245,16 +244,27 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         checkUnreached(suiteOf(dataContractPushingBoth(), only(externalDependency())), MOCK_EXTERNAL_ADDRESS);
     }
 
+    function mockCreate2DeclarationWith(DeploySuite memory suite) internal pure returns (DeployDeclaration memory) {
+        DeployDeclaration memory d = declarationWith(suite);
+        LibMockCreate2Mechanism.extend(d);
+        return d;
+    }
+
+    function externalMockCreate2Check(DeploySuite memory suite) external view {
+        checkDependenciesAreTheEmbeddedDeployments(mockCreate2DeclarationWith(suite));
+    }
+
     function testMechanismDataEmbedsAnUndeclaredDeployment() external {
         DeploySuite memory suite = suiteOf(STOP, new DeployDependency[](0));
         suite.mechanismData = mechanismNaming(MOCK_EXTERNAL_ADDRESS);
-        checkUndeclared(suite, MOCK_EXTERNAL_ADDRESS);
+        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, SUITE, MOCK_EXTERNAL_ADDRESS));
+        this.externalMockCreate2Check(suite);
     }
 
     function testMechanismDataReachesADeclaredDependency() external view {
         DeploySuite memory suite = suiteOf(STOP, only(externalDependency()));
         suite.mechanismData = mechanismNaming(MOCK_EXTERNAL_ADDRESS);
-        checkDependenciesAreTheEmbeddedDeployments(declarationWith(suite));
+        checkDependenciesAreTheEmbeddedDeployments(mockCreate2DeclarationWith(suite));
     }
 
     function testDeclaredDependencyNothingEmbedsIsUnreached() external {
@@ -356,13 +366,5 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
             bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP);
         vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId()));
         this.externalPerNetworkCheck(suiteOf(creationCode, both()), address(0));
-    }
-
-    function testUnclaimedSuiteWithZeroStoredAddressIsRefused() external {
-        DeploySuite memory suite = suiteOf(STOP, new DeployDependency[](0));
-        suite.mechanismData = mechanismNaming(MOCK_EXTERNAL_ADDRESS);
-        suite.storedDeployedAddress = address(0);
-        vm.expectRevert(abi.encodeWithSelector(ZeroStoredAddress.selector, SUITE));
-        this.externalCheck(suite);
     }
 }
