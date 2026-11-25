@@ -385,8 +385,7 @@ library LibRainDeployDeclaration {
         view
         returns (address[] memory)
     {
-        uint256[] memory chainIds =
-            LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
+        uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
         DeployMechanismHandler memory mechanism = mechanismOf(d, suite);
         address[] memory addresses = new address[](chainIds.length);
         for (uint256 i = 0; i < chainIds.length; i++) {
@@ -441,7 +440,8 @@ library LibRainDeployDeclaration {
     }
 
     /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
-    /// refusing `DependencyCycle` where they reach an address `suite` records on one of its networks.
+    /// refusing `DependencyCycle` where they reach an address the declaration's suite at `suite`'s key records on one
+    /// of its networks; an undeclared key records none.
     function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite)
         internal
         view
@@ -453,7 +453,8 @@ library LibRainDeployDeclaration {
         for (uint256 i = 0; i < suites.length; i++) {
             recorded[i] = recordedAddresses(d, suites[i]);
         }
-        address[] memory own = recordedAddresses(d, suite);
+        uint256 index = suiteIndex(suites, suite.suite);
+        address[] memory own = index < suites.length ? recorded[index] : new address[](0);
         DeployDependency[] memory closure = new DeployDependency[](0);
         string[] memory declarers = new string[](0);
         (closure, declarers) = appendNew(closure, declarers, suite.dependencies, suite.suite);
