@@ -44,26 +44,14 @@ contract SafeBundleScriptTest is Test {
         if (vm.exists(sPath)) vm.removeFile(sPath);
     }
 
-    /// The Safe's own `getTransactionHash` of the MultiSend for the two calls
-    /// `ExampleSafeBundleScript` authors by default, with the MultiSend payload
-    /// packed by hand (operation, to, value, data length, data per call), so the
-    /// hash `run()` and `verify()` return is checked against the Safe rather than
-    /// against `LibSafeTx`.
+    /// The Safe's own `getTransactionHash` of the MultiSend DELEGATECALL of
+    /// `payload`, so the hash `run()` and `verify()` return is checked against
+    /// the Safe rather than against `LibSafeTx`.
+    /// @param payload The MultiSend payload, packed by hand (operation, to,
+    /// value, data length, data per call).
     /// @param nonce The Safe nonce the hash is at.
     /// @return The hash.
-    function expectedBundleHash(uint256 nonce) internal view returns (bytes32) {
-        bytes memory payload = abi.encodePacked(
-            uint8(0),
-            address(sRecorder),
-            uint256(0),
-            uint256(5),
-            bytes("first"),
-            uint8(0),
-            address(sRecorder),
-            uint256(0),
-            uint256(6),
-            bytes("second")
-        );
+    function multiSendHash(bytes memory payload, uint256 nonce) internal view returns (bytes32) {
         return sSafe.getTransactionHash(
             LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY,
             0,
@@ -75,6 +63,38 @@ contract SafeBundleScriptTest is Test {
             address(0),
             address(0),
             nonce
+        );
+    }
+
+    /// `multiSendHash` of the two calls `ExampleSafeBundleScript` authors by
+    /// default.
+    /// @param nonce The Safe nonce the hash is at.
+    /// @return The hash.
+    function expectedBundleHash(uint256 nonce) internal view returns (bytes32) {
+        return multiSendHash(
+            abi.encodePacked(
+                uint8(0),
+                address(sRecorder),
+                uint256(0),
+                uint256(5),
+                bytes("first"),
+                uint8(0),
+                address(sRecorder),
+                uint256(0),
+                uint256(6),
+                bytes("second")
+            ),
+            nonce
+        );
+    }
+
+    /// The Safe's own `getTransactionHash` of the first call alone, made
+    /// directly: a CALL to the recorder with its value and data.
+    /// @param nonce The Safe nonce the hash is at.
+    /// @return The hash.
+    function expectedFirstCallHash(uint256 nonce) internal view returns (bytes32) {
+        return sSafe.getTransactionHash(
+            address(sRecorder), 0, bytes("first"), Enum.Operation.Call, 0, 0, 0, address(0), address(0), nonce
         );
     }
 
@@ -101,6 +121,31 @@ contract SafeBundleScriptTest is Test {
         assertEq(sRecorder.calls(1).data, bytes("second"));
         assertEq(sSafe.nonce(), nonce + 1);
         assertEq(sScript.verify(sPath), expectedBundleHash(nonce + 1));
+    }
+
+    /// A one-transaction bundle is signed as that transaction called directly,
+    /// as the Safe Transaction Builder proposes it, not as a MultiSend of one:
+    /// `run()` and `verify()` return the Safe's hash of the direct CALL, and
+    /// `run()` executes it from the Safe at one nonce.
+    function testRunSingleTransactionIsDirectCall() external {
+        setUpScript("single");
+        sScript.setFirstCallOnly(true);
+        uint256 nonce = sSafe.nonce();
+        bytes32 direct = expectedFirstCallHash(nonce);
+        assertNotEq(
+            direct,
+            multiSendHash(abi.encodePacked(uint8(0), address(sRecorder), uint256(0), uint256(5), bytes("first")), nonce)
+        );
+
+        vm.expectEmit(address(sSafe));
+        emit Safe.ExecutionSuccess(direct, 0);
+        assertEq(sScript.run(), direct);
+
+        assertEq(sRecorder.callCount(), 1);
+        assertEq(sRecorder.calls(0).caller, address(sSafe));
+        assertEq(sRecorder.calls(0).data, bytes("first"));
+        assertEq(sSafe.nonce(), nonce + 1);
+        assertEq(sScript.verify(sPath), expectedFirstCallHash(nonce + 1));
     }
 
     /// A transaction's value reaches its target: the bundle is executed with
