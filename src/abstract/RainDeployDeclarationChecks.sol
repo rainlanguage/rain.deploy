@@ -254,12 +254,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     /// @param needle The address.
     /// @return Whether `addresses` holds `needle`.
     function holds(address[] memory addresses, address needle) internal pure returns (bool) {
-        for (uint256 i = 0; i < addresses.length; i++) {
-            if (addresses[i] == needle) {
-                return true;
-            }
-        }
-        return false;
+        return LibRainDeployDeclaration.holds(addresses, needle);
     }
 
     /// @param suite The suite.
@@ -286,7 +281,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
                 address dependency = deps[j].deployedAddress;
                 bytes32 declared = keccak256(deps[j].runtimeCode);
                 (uint256[] memory suiteIndexes, uint256[] memory externalIndexes) =
-                    LibRainDeployDeclaration.resolveDependency(suites, externals, suites[i].suite, dependency);
+                    LibRainDeployDeclaration.resolveDependency(siblings, externals, suites[i].suite, dependency);
                 for (uint256 k = 0; k < suiteIndexes.length; k++) {
                     checkCodeHash(suites[i].suite, dependency, declared, suites[suiteIndexes[k]].storedBytecodeHash);
                 }

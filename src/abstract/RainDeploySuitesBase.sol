@@ -575,12 +575,7 @@ abstract contract RainDeploySuitesBase {
         view
         returns (address[] memory)
     {
-        uint256[] memory chainIds = suiteChainIds(suite);
-        address[] memory addresses = new address[](chainIds.length);
-        for (uint256 i = 0; i < chainIds.length; i++) {
-            addresses[i] = recordedAddress(d, suite, chainIds[i]);
-        }
-        return addresses;
+        return LibRainDeployDeclaration.recordedAddresses(d, suite);
     }
 
     /// `checkNetworkFrozen` on each of `networks` among `onNetworks`' networks, with its recorded address there.

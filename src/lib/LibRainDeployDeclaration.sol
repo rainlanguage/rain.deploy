@@ -378,21 +378,49 @@ library LibRainDeployDeclaration {
         return suites;
     }
 
-    /// The indexes of every suite at nonzero `dependency` and of every external deployment at it, refusing
-    /// `UnknownDependency` naming `declaring` where there is neither.
+    /// @param suite The suite.
+    /// @return The address its mechanism records for it on each of its `networks`, in order.
+    function recordedAddresses(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        view
+        returns (address[] memory)
+    {
+        uint256[] memory chainIds =
+            LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
+        DeployMechanismHandler memory mechanism = mechanismOf(d, suite);
+        address[] memory addresses = new address[](chainIds.length);
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            addresses[i] = mechanism.recordedAddress(d, suite, chainIds[i]);
+        }
+        return addresses;
+    }
+
+    /// @param addresses The addresses.
+    /// @param needle The address.
+    /// @return Whether `addresses` holds `needle`.
+    function holds(address[] memory addresses, address needle) internal pure returns (bool) {
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i] == needle) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// The indexes of every suite recording `dependency` on one of its networks and of every external deployment at
+    /// it, refusing `UnknownDependency` naming `declaring` where there is neither.
+    /// @param recorded Each suite's `recordedAddresses`.
     function resolveDependency(
-        DeploySuite[] memory suites,
+        address[][] memory recorded,
         ExternalDeployment[] memory externals,
         string memory declaring,
         address dependency
     ) internal pure returns (uint256[] memory, uint256[] memory) {
-        uint256[] memory suiteIndexes = new uint256[](suites.length);
+        uint256[] memory suiteIndexes = new uint256[](recorded.length);
         uint256 suiteCount = 0;
-        if (dependency != address(0)) {
-            for (uint256 i = 0; i < suites.length; i++) {
-                if (suites[i].storedDeployedAddress == dependency) {
-                    suiteIndexes[suiteCount++] = i;
-                }
+        for (uint256 i = 0; i < recorded.length; i++) {
+            if (holds(recorded[i], dependency)) {
+                suiteIndexes[suiteCount++] = i;
             }
         }
         uint256[] memory externalIndexes = new uint256[](externals.length);
@@ -413,23 +441,31 @@ library LibRainDeployDeclaration {
     }
 
     /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
-    /// refusing `DependencyCycle` where they reach `suite`'s own nonzero address.
+    /// refusing `DependencyCycle` where they reach an address `suite` records on one of its networks.
     function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite)
         internal
-        pure
+        view
         returns (DeployDependency[] memory)
     {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
+        address[][] memory recorded = new address[][](suites.length);
+        for (uint256 i = 0; i < suites.length; i++) {
+            recorded[i] = recordedAddresses(d, suites[i]);
+        }
+        address[] memory own = recordedAddresses(d, suite);
         DeployDependency[] memory closure = new DeployDependency[](0);
         string[] memory declarers = new string[](0);
-        (closure, declarers) = appendNew(closure, declarers, suite, suite.dependencies, suite.suite);
+        (closure, declarers) = appendNew(closure, declarers, suite.dependencies, suite.suite);
         for (uint256 i = 0; i < closure.length; i++) {
+            if (holds(own, closure[i].deployedAddress)) {
+                revert DependencyCycle(suite.suite);
+            }
             (uint256[] memory suiteIndexes,) =
-                resolveDependency(suites, externals, declarers[i], closure[i].deployedAddress);
+                resolveDependency(recorded, externals, declarers[i], closure[i].deployedAddress);
             for (uint256 j = 0; j < suiteIndexes.length; j++) {
                 DeploySuite memory reached = suites[suiteIndexes[j]];
-                (closure, declarers) = appendNew(closure, declarers, suite, reached.dependencies, reached.suite);
+                (closure, declarers) = appendNew(closure, declarers, reached.dependencies, reached.suite);
             }
         }
         return closure;
@@ -438,15 +474,11 @@ library LibRainDeployDeclaration {
     function appendNew(
         DeployDependency[] memory closure,
         string[] memory declarers,
-        DeploySuite memory suite,
         DeployDependency[] memory deps,
         string memory declarer
     ) private pure returns (DeployDependency[] memory, string[] memory) {
         for (uint256 i = 0; i < deps.length; i++) {
             address dependency = deps[i].deployedAddress;
-            if (dependency != address(0) && dependency == suite.storedDeployedAddress) {
-                revert DependencyCycle(suite.suite);
-            }
             bool seen = false;
             for (uint256 j = 0; j < closure.length; j++) {
                 if (closure[j].deployedAddress == dependency) {

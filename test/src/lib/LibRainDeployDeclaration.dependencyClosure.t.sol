@@ -99,7 +99,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         DeploySuite[] memory candidates,
         ExternalDeployment[] memory externals,
         DeploySuite memory suite
-    ) public pure returns (DeployDependency[] memory) {
+    ) public view returns (DeployDependency[] memory) {
         DeployDeclaration memory d;
         d.released = released;
         d.candidates = new DeployCandidate[](candidates.length);
