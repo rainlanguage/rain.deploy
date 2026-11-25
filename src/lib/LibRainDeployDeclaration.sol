@@ -439,9 +439,27 @@ library LibRainDeployDeclaration {
         return (suiteIndexes, externalIndexes);
     }
 
+    /// @param suite A declared suite.
+    /// @return The address its mechanism records for it on each of its `networks`, then on each network its candidate
+    /// adds, at the address a broadcast of it derives there.
+    function occupiedAddresses(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        view
+        returns (address[] memory)
+    {
+        DeploySuite memory occupying = abi.decode(abi.encode(suite), (DeploySuite));
+        (DeploySuite memory candidate, bool found) = candidateOf(d, suite.suite);
+        if (found) {
+            uint256[] memory chainIds =
+                LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(candidate.networks));
+            addUnrecordedNetworks(d, occupying, candidate, chainIds);
+        }
+        return recordedAddresses(d, occupying);
+    }
+
     /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
-    /// refusing `DependencyCycle` where they reach an address the declaration's suite at `suite`'s key records on one
-    /// of its networks; an undeclared key records none.
+    /// refusing `DependencyCycle` where they reach one of the `occupiedAddresses` of the declaration's suite at
+    /// `suite`'s key; an undeclared key occupies none.
     function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite)
         internal
         view
@@ -454,7 +472,7 @@ library LibRainDeployDeclaration {
             recorded[i] = recordedAddresses(d, suites[i]);
         }
         uint256 index = suiteIndex(suites, suite.suite);
-        address[] memory own = index < suites.length ? recorded[index] : new address[](0);
+        address[] memory own = index < suites.length ? occupiedAddresses(d, suites[index]) : new address[](0);
         DeployDependency[] memory closure = new DeployDependency[](0);
         string[] memory declarers = new string[](0);
         (closure, declarers) = appendNew(closure, declarers, suite.dependencies, suite.suite);
