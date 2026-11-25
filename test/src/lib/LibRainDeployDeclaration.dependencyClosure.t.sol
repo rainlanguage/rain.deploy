@@ -21,7 +21,7 @@ import {
     MOCK_CREATE2_SALT,
     MockCreate2Mechanism
 } from "../../lib/LibMockCreate2Mechanism.sol";
-import {MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
+import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 
 contract LibRainDeployDeclarationDependencyClosureTest is Test {
     address constant SUBJECT = address(0x5);
@@ -436,5 +436,38 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p@0_0_1"));
         this.closureOnAddedNetworksOf(suites(frozen, a), suites(candidate), frozen, candidate, chainIds);
+    }
+
+    /// A release broadcast to a network only its own records add is at the address recorded there, so a closure
+    /// reaching that address is a cycle however the address resolves.
+    function testClosureRefusesACycleThroughAnAddressItsRecordsAddANetworkAt() external {
+        string memory root = "test/generated-snapshot/closure-recorded-cycle";
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        try vm.removeDir(root, true) {} catch {}
+        MockNetworkDeploy[] memory frozenNetworks = new MockNetworkDeploy[](1);
+        frozenNetworks[0] = derivedNetwork(0, hex"01");
+        MockNetworkDeploy[] memory recordedNetworks = new MockNetworkDeploy[](1);
+        recordedNetworks[0] = derivedNetwork(1, hex"02");
+        address recorded = recordedNetworks[0].deployedAddress;
+        DeploySuite memory frozen = perNetworkSuiteOn("p@0_0_1", frozenNetworks, deps(dep(A, hex"aa")));
+        MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(frozen);
+        mechanism.root = root;
+        frozen.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
+        LibMockNetworkRecord.write(vm, root, frozen.suite, recordedNetworks);
+        DeploySuite memory a = suiteAt("a", A, deps(dep(recorded, hex"72")));
+        ExternalDeployment[] memory externals = new ExternalDeployment[](1);
+        externals[0] = ExternalDeployment({deployedAddress: recorded, codeHash: keccak256(hex"72")});
+
+        DeploySuite memory broadcast = abi.decode(abi.encode(frozen), (DeploySuite));
+        DeployDeclaration memory d = declarationOf(suites(frozen), suites(a), externals);
+        LibRainDeployDeclaration.mechanismOf(d, broadcast).addRecordedNetworks(d, broadcast);
+        address[] memory own = LibRainDeployDeclaration.recordedAddresses(d, broadcast);
+        assertEq(own.length, 2, "networks");
+        assertEq(own[1], recorded, "recorded address");
+
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p@0_0_1"));
+        this.closureOf(suites(frozen), suites(a), externals, broadcast);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
     }
 }
