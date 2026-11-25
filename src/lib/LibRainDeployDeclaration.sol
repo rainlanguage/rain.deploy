@@ -534,8 +534,11 @@ library LibRainDeployDeclaration {
     }
 
     /// Etches each dependency in `suite`'s dependency closure at its address.
-    function etchDependencyClosure(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        DeployDependency[] memory closure = dependencyClosure(d, suite);
+    /// @param own Every address `suite` occupies on the networks it is deployed to.
+    function etchDependencyClosure(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, address[] memory own)
+        internal
+    {
+        DeployDependency[] memory closure = dependencyClosure(d, suite, own);
         for (uint256 i = 0; i < closure.length; i++) {
             vm.etch(closure[i].deployedAddress, closure[i].runtimeCode);
         }

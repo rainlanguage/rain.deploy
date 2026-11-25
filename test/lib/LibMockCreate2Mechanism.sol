@@ -182,8 +182,8 @@ library LibMockCreate2Mechanism {
         }
     }
 
-    function etchFactory(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite);
+    function etchFactory(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, address[] memory own) internal {
+        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite, own);
         vm.etch(decode(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
 
@@ -233,7 +233,6 @@ library LibMockCreate2Mechanism {
         internal
         returns (address[] memory)
     {
-        etchFactory(d, vm, suite);
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
         address[] memory deployed = new address[](chainIds.length);
         MockCreate2Mechanism memory mechanism = decode(suite);
@@ -246,7 +245,10 @@ library LibMockCreate2Mechanism {
                 }
             }
             deployed[i] = deployedAddress(d, suite, chainIds[i]);
-            if (perNetwork || i == 0) {
+        }
+        etchFactory(d, vm, suite, deployed);
+        for (uint256 i = 0; i < deployed.length; i++) {
+            if (deployed[i] != address(0) && (perNetwork || i == 0)) {
                 deployAt(vm, suite, salt(suite, chainIds[i]), deployed[i]);
             }
         }
@@ -254,8 +256,10 @@ library LibMockCreate2Mechanism {
     }
 
     function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        etchFactory(d, vm, suite);
-        deployAt(vm, suite, salt(suite, block.chainid), deployedAddress(d, suite, block.chainid));
+        address[] memory own = new address[](1);
+        own[0] = deployedAddress(d, suite, block.chainid);
+        etchFactory(d, vm, suite, own);
+        deployAt(vm, suite, salt(suite, block.chainid), own[0]);
     }
 
     /// Per-network: adds to `suite` each of `chainIds` its candidate deploys to and it records nothing on, at the

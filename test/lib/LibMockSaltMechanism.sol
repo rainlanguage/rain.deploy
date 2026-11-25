@@ -102,7 +102,9 @@ library LibMockSaltMechanism {
         internal
         returns (address[] memory)
     {
-        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite);
+        address[] memory own = new address[](1);
+        own[0] = deployedAddress(d, suite, 0);
+        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite, own);
         vm.etch(MOCK_CREATE2_FACTORY, type(MockCreate2Factory).runtimeCode);
         address one = MockCreate2Factory(MOCK_CREATE2_FACTORY).deploy(salt(suite), suite.creationCode);
         address[] memory deployed = new address[](suite.networks.length);
