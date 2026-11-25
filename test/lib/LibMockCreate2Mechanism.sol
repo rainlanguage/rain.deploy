@@ -246,13 +246,30 @@ library LibMockCreate2Mechanism {
             }
             deployed[i] = deployedAddress(d, suite, chainIds[i]);
         }
-        etchFactory(d, vm, suite, deployed);
+        etchFactory(d, vm, suite, nonzero(deployed));
         for (uint256 i = 0; i < deployed.length; i++) {
             if (deployed[i] != address(0) && (perNetwork || i == 0)) {
                 deployAt(vm, suite, salt(suite, chainIds[i]), deployed[i]);
             }
         }
         return deployed;
+    }
+
+    function nonzero(address[] memory addresses) internal pure returns (address[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i] != address(0)) {
+                count++;
+            }
+        }
+        address[] memory kept = new address[](count);
+        count = 0;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i] != address(0)) {
+                kept[count++] = addresses[i];
+            }
+        }
+        return kept;
     }
 
     function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {

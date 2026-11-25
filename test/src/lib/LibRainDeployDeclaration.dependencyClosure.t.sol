@@ -490,14 +490,14 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         return perNetworkSuiteOn("p", recorded, deps(dep(address(0), hex"00")));
     }
 
-    /// A local per-network deploy passes `address(0)` as its own address on a network its payload records nothing on,
-    /// so a zero dependency is refused as a cycle.
-    function testLocalPerNetworkDeployOnAnUnrecordedNetworkRefusesAZeroDependencyAsACycle() external {
+    /// A local per-network deploy occupies no address on a network its payload records nothing on, so a zero
+    /// dependency is unknown.
+    function testLocalPerNetworkDeployOnAnUnrecordedNetworkRefusesAZeroDependencyAsUnknown() external {
         DeploySuite memory declared = zeroDependentPerNetworkSuite();
         DeploySuite memory local = zeroDependentPerNetworkSuite();
         local.networks = twoNetworks();
 
-        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p"));
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "p", address(0)));
         this.deployLocallyOf(suites(declared), local);
     }
 
