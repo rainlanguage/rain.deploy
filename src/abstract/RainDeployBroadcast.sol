@@ -216,7 +216,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
         for (uint256 i = 0; i < configs.length; i++) {
             LibRainDeploy.selectCheckedFork(
-                vm, configs[i], forkIds[i], LibRainDeployDeclaration.dependencyClosure(d, suite)
+                vm,
+                configs[i],
+                forkIds[i],
+                LibRainDeployDeclaration.dependencyClosure(d, suite, deploys.expectedAddresses)
             );
             preDeployCheck(d, suite, configs[i]);
             LibRainDeploy.deployStepToSelectedFork(
