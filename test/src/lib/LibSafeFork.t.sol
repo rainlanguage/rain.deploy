@@ -184,7 +184,7 @@ contract LibSafeForkTest is Test {
         );
         vm.expectEmit(address(safe));
         emit Safe.ExecutionSuccess(direct, 0);
-        LibSafeFork.executeBundle(vm, safe, txs);
+        this.externalExecuteBundle(safe, txs);
         assertEq(safe.nonce(), nonce + 1);
         assertEq(recorder.callCount(), 1);
         assertEq(recorder.calls(0).caller, address(safe));
