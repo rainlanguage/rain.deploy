@@ -11,7 +11,7 @@ name = "rain-deploy"
 # that tag moves it, in lockstep with the record the cut writes. A version
 # published before this lifecycle has no such record, so src/generated/ holds no
 # directory for it.
-version = "0.1.33"
+version = "0.1.38"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
@@ -100,7 +100,7 @@ rain-lib-memkv = "0.2.0"
 safe-global-safe-smart-account = "1.4.1-3"
 rain-metadata = "0.1.46"
 rain-string = "0.3.11"
-rain-extrospection = "0.1.19"
+rain-extrospection = "0.1.31"
 rain-solmem = "0.1.28"
 
 [soldeer]
@@ -128,6 +128,7 @@ flare = "${FLARE_RPC_URL}"
 hyperevm = "${HYPEREVM_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
 robinhood = "${ROBINHOOD_RPC_URL}"
+zerog = "${ZEROG_RPC_URL}"
 # rain-deploy:generated:rpc_endpoints:end
 
 # `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
@@ -155,4 +156,5 @@ flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}", chain = 14 }
 hyperevm = { key = "${CI_DEPLOY_HYPEREVM_ETHERSCAN_API_KEY}", chain = 999 }
 polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}", chain = 137 }
 robinhood = { key = "${CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
+zerog = { key = "${CI_DEPLOY_ZEROG_ETHERSCAN_API_KEY}", chain = 16661, url = "https://chainscan.0g.ai/open/api" }
 # rain-deploy:generated:etherscan:end
