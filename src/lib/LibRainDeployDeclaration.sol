@@ -457,10 +457,24 @@ library LibRainDeployDeclaration {
         return recordedAddresses(d, occupying);
     }
 
-    /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
-    /// refusing `DependencyCycle` where they reach one of the `occupiedAddresses` of the declaration's suite at
-    /// `suite`'s key; an undeclared key occupies none.
+    /// `dependencyClosure` refusing a cycle through the `occupiedAddresses` of the declaration's suite at `suite`'s
+    /// key; an undeclared key occupies none.
     function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        view
+        returns (DeployDependency[] memory)
+    {
+        DeploySuite[] memory suites = allSuites(d);
+        uint256 index = suiteIndex(suites, suite.suite);
+        return dependencyClosure(
+            d, suite, index < suites.length ? occupiedAddresses(d, suites[index]) : new address[](0)
+        );
+    }
+
+    /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
+    /// refusing `DependencyCycle` where they reach one of `own`.
+    /// @param own Every address `suite` occupies on the networks it is deployed to.
+    function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite, address[] memory own)
         internal
         view
         returns (DeployDependency[] memory)
@@ -471,8 +485,6 @@ library LibRainDeployDeclaration {
         for (uint256 i = 0; i < suites.length; i++) {
             recorded[i] = recordedAddresses(d, suites[i]);
         }
-        uint256 index = suiteIndex(suites, suite.suite);
-        address[] memory own = index < suites.length ? occupiedAddresses(d, suites[index]) : new address[](0);
         DeployDependency[] memory closure = new DeployDependency[](0);
         string[] memory declarers = new string[](0);
         (closure, declarers) = appendNew(closure, declarers, suite.dependencies, suite.suite);
