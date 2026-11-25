@@ -177,7 +177,9 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         ExternalDeployment[] memory externals,
         DeploySuite memory suite
     ) public view returns (DeployDependency[] memory) {
-        return LibRainDeployDeclaration.dependencyClosure(declarationOf(released, candidates, externals), suite);
+        DeployDeclaration memory d = declarationOf(released, candidates, externals);
+        address[] memory own = LibRainDeployDeclaration.recordedAddresses(d, suite);
+        return LibRainDeployDeclaration.dependencyClosure(d, suite, own);
     }
 
     /// The closure of `suite` once its candidate adds the networks among `chainIds` it records nothing on, as a
@@ -191,7 +193,8 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     ) public view returns (DeployDependency[] memory) {
         DeployDeclaration memory d = declarationOf(released, candidates, new ExternalDeployment[](0));
         LibRainDeployDeclaration.addUnrecordedNetworks(d, suite, candidate, chainIds);
-        return LibRainDeployDeclaration.dependencyClosure(d, suite);
+        address[] memory own = LibRainDeployDeclaration.recordedAddresses(d, suite);
+        return LibRainDeployDeclaration.dependencyClosure(d, suite, own);
     }
 
     function assertClosure(DeployDependency[] memory actual, DeployDependency[] memory expected) internal pure {
@@ -402,12 +405,13 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         this.closureOf(new DeploySuite[](0), suites(zero), new ExternalDeployment[](0), zero);
     }
 
-    /// An undeclared suite records no address of its own, so a dependency at its own address is unknown, not a cycle.
-    function testClosureOfAnUndeclaredSuiteRefusesItsOwnAddressAsUnknown() external {
+    /// A suite occupies the addresses its caller passes whether or not the declaration holds it, so an undeclared
+    /// suite depending on its own address is a cycle.
+    function testClosureRefusesAnUndeclaredSuiteDependingOnItsOwnAddress() external {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(SUBJECT, hex"55")));
         DeploySuite memory a = suiteAt("a", A, new DeployDependency[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "subject", SUBJECT));
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "subject"));
         this.closureOf(new DeploySuite[](0), suites(a), new ExternalDeployment[](0), subject);
     }
 
@@ -469,5 +473,39 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         this.closureOf(suites(frozen), suites(a), externals, broadcast);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
+    }
+
+    function deployLocallyOf(DeploySuite[] memory released, DeploySuite memory suite)
+        external
+        returns (address[] memory)
+    {
+        DeployDeclaration memory d = declarationOf(released, new DeploySuite[](0), new ExternalDeployment[](0));
+        return LibMockCreate2Mechanism.deployLocally(d, vm, suite);
+    }
+
+    /// A per-network suite on one recorded network depending on `address(0)`.
+    function zeroDependentPerNetworkSuite() internal pure returns (DeploySuite memory) {
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
+        recorded[0] = derivedNetwork(0, hex"01");
+        return perNetworkSuiteOn("p", recorded, deps(dep(address(0), hex"00")));
+    }
+
+    /// A local per-network deploy passes `address(0)` as its own address on a network its payload records nothing on,
+    /// so a zero dependency is refused as a cycle.
+    function testLocalPerNetworkDeployOnAnUnrecordedNetworkRefusesAZeroDependencyAsACycle() external {
+        DeploySuite memory declared = zeroDependentPerNetworkSuite();
+        DeploySuite memory local = zeroDependentPerNetworkSuite();
+        local.networks = twoNetworks();
+
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p"));
+        this.deployLocallyOf(suites(declared), local);
+    }
+
+    /// A local per-network deploy on only the networks its payload records refuses a zero dependency as unknown.
+    function testLocalPerNetworkDeployOnRecordedNetworksRefusesAZeroDependencyAsUnknown() external {
+        DeploySuite memory declared = zeroDependentPerNetworkSuite();
+
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "p", address(0)));
+        this.deployLocallyOf(suites(declared), declared);
     }
 }
