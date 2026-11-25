@@ -94,13 +94,28 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](2);
         recorded[0] = MockNetworkDeploy({chainId: chainIdAt(0), data: "", deployedAddress: first});
         recorded[1] = MockNetworkDeploy({chainId: chainIdAt(1), data: "", deployedAddress: later});
+        return perNetworkSuiteOn(key, recorded, dependencies);
+    }
+
+    /// A per-network suite on exactly the networks its mechanism records.
+    function perNetworkSuiteOn(
+        string memory key,
+        MockNetworkDeploy[] memory recorded,
+        DeployDependency[] memory dependencies
+    ) internal pure returns (DeploySuite memory) {
         DeploySuite memory suite = suiteAt(key, address(0), dependencies);
+        suite.networks = LibMockCreate2Mechanism.networkNames(recorded);
         suite.mechanismData = LibMockCreate2Mechanism.encode(
             MockCreate2Mechanism({
                 factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: recorded, root: ""
             })
         );
         return suite;
+    }
+
+    /// What a per-network suite with empty creation code derives on the network at `index` from `data`.
+    function derivedNetwork(uint256 index, bytes memory data) internal pure returns (MockNetworkDeploy memory) {
+        return LibMockCreate2Mechanism.network(MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, "", chainIdAt(index), data);
     }
 
     function withoutNetworks(DeploySuite memory suite) internal pure returns (DeploySuite memory) {
@@ -139,12 +154,11 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         return externals;
     }
 
-    function closureOf(
+    function declarationOf(
         DeploySuite[] memory released,
         DeploySuite[] memory candidates,
-        ExternalDeployment[] memory externals,
-        DeploySuite memory suite
-    ) public view returns (DeployDependency[] memory) {
+        ExternalDeployment[] memory externals
+    ) internal pure returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployZoltuMechanism.extend(d);
         LibMockCreate2Mechanism.extend(d);
@@ -154,6 +168,29 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
             d.candidates[i] = DeployCandidate({snapshot: candidates[i], unanchorableReason: ""});
         }
         d.externalDeployments = externals;
+        return d;
+    }
+
+    function closureOf(
+        DeploySuite[] memory released,
+        DeploySuite[] memory candidates,
+        ExternalDeployment[] memory externals,
+        DeploySuite memory suite
+    ) public view returns (DeployDependency[] memory) {
+        return LibRainDeployDeclaration.dependencyClosure(declarationOf(released, candidates, externals), suite);
+    }
+
+    /// The closure of `suite` once its candidate adds the networks among `chainIds` it records nothing on, as a
+    /// broadcast takes it.
+    function closureOnAddedNetworksOf(
+        DeploySuite[] memory released,
+        DeploySuite[] memory candidates,
+        DeploySuite memory suite,
+        DeploySuite memory candidate,
+        uint256[] memory chainIds
+    ) public view returns (DeployDependency[] memory) {
+        DeployDeclaration memory d = declarationOf(released, candidates, new ExternalDeployment[](0));
+        LibRainDeployDeclaration.addUnrecordedNetworks(d, suite, candidate, chainIds);
         return LibRainDeployDeclaration.dependencyClosure(d, suite);
     }
 
@@ -363,5 +400,40 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "zero"));
         this.closureOf(new DeploySuite[](0), suites(zero), new ExternalDeployment[](0), zero);
+    }
+
+    /// An undeclared suite records no address of its own, so a dependency at its own address is unknown, not a cycle.
+    function testClosureOfAnUndeclaredSuiteRefusesItsOwnAddressAsUnknown() external {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(SUBJECT, hex"55")));
+
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "subject", SUBJECT));
+        this.closureOf(new DeploySuite[](0), new DeploySuite[](0), new ExternalDeployment[](0), subject);
+    }
+
+    /// A release broadcast to a network only its candidate records deploys at the address its own salt derives there,
+    /// so a closure reaching that address is a cycle.
+    function testClosureRefusesACycleThroughAnAddressItsCandidateAddsANetworkAt() external {
+        MockNetworkDeploy memory first = derivedNetwork(0, hex"01");
+        MockNetworkDeploy memory later = derivedNetwork(1, hex"02");
+        MockNetworkDeploy[] memory frozenNetworks = new MockNetworkDeploy[](1);
+        frozenNetworks[0] = first;
+        MockNetworkDeploy[] memory candidateNetworks = new MockNetworkDeploy[](2);
+        candidateNetworks[0] = first;
+        candidateNetworks[1] = later;
+        DeploySuite memory frozen = perNetworkSuiteOn("p@0_0_1", frozenNetworks, deps(dep(A, hex"aa")));
+        DeploySuite memory candidate = perNetworkSuiteOn("p", candidateNetworks, new DeployDependency[](0));
+        DeploySuite memory a = suiteAt("a", A, deps(dep(later.deployedAddress, hex"71")));
+        uint256[] memory chainIds = new uint256[](1);
+        chainIds[0] = chainIdAt(1);
+
+        DeploySuite memory broadcast = abi.decode(abi.encode(frozen), (DeploySuite));
+        DeployDeclaration memory d = declarationOf(suites(frozen, a), suites(candidate), new ExternalDeployment[](0));
+        LibRainDeployDeclaration.addUnrecordedNetworks(d, broadcast, candidate, chainIds);
+        address[] memory own = LibRainDeployDeclaration.recordedAddresses(d, broadcast);
+        assertEq(own.length, 2, "networks");
+        assertEq(own[1], later.deployedAddress, "added address");
+
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p@0_0_1"));
+        this.closureOnAddedNetworksOf(suites(frozen, a), suites(candidate), frozen, candidate, chainIds);
     }
 }
