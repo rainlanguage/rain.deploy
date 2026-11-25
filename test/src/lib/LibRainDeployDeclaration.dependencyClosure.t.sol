@@ -12,8 +12,16 @@ import {
     ExternalDeployment,
     UnknownDependency
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {
+    LibMockCreate2Mechanism,
+    MOCK_CREATE2_FACTORY,
+    MOCK_CREATE2_SALT,
+    MockCreate2Mechanism
+} from "../../lib/LibMockCreate2Mechanism.sol";
+import {MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 
 contract LibRainDeployDeclarationDependencyClosureTest is Test {
     address constant SUBJECT = address(0x5);
@@ -22,6 +30,8 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     address constant C = address(0xc);
     address constant EXTERNAL = address(0xe);
     address constant UNKNOWN = address(0xf);
+    address constant PER_NETWORK_FIRST = address(0x70);
+    address constant PER_NETWORK_LATER = address(0x71);
 
     function dep(address at, bytes memory code) internal pure returns (DeployDependency memory) {
         return DeployDependency({deployedAddress: at, runtimeCode: code});
@@ -58,9 +68,44 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: dependencies,
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0),
+            networks: twoNetworks(),
             describedByMeta: ""
         });
+    }
+
+    function chainIdAt(uint256 index) internal pure returns (uint256) {
+        return LibRainDeploy.supportedNetworkConfigs()[index].chainId;
+    }
+
+    function twoNetworks() internal pure returns (string[] memory) {
+        string[] memory networks = new string[](2);
+        networks[0] = LibMockCreate2Mechanism.networkName(chainIdAt(0));
+        networks[1] = LibMockCreate2Mechanism.networkName(chainIdAt(1));
+        return networks;
+    }
+
+    /// A per-network suite whose stored address is the zero sentinel and whose mechanism records `first` on its first
+    /// network and `later` on its second.
+    function perNetworkSuiteAt(string memory key, address first, address later, DeployDependency[] memory dependencies)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](2);
+        recorded[0] = MockNetworkDeploy({chainId: chainIdAt(0), data: "", deployedAddress: first});
+        recorded[1] = MockNetworkDeploy({chainId: chainIdAt(1), data: "", deployedAddress: later});
+        DeploySuite memory suite = suiteAt(key, address(0), dependencies);
+        suite.mechanismData = LibMockCreate2Mechanism.encode(
+            MockCreate2Mechanism({
+                factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: recorded, root: ""
+            })
+        );
+        return suite;
+    }
+
+    function withoutNetworks(DeploySuite memory suite) internal pure returns (DeploySuite memory) {
+        suite.networks = new string[](0);
+        return suite;
     }
 
     function suites(DeploySuite memory a) internal pure returns (DeploySuite[] memory) {
@@ -101,6 +146,8 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         DeploySuite memory suite
     ) public view returns (DeployDependency[] memory) {
         DeployDeclaration memory d;
+        LibRainDeployZoltuMechanism.extend(d);
+        LibMockCreate2Mechanism.extend(d);
         d.released = released;
         d.candidates = new DeployCandidate[](candidates.length);
         for (uint256 i = 0; i < candidates.length; i++) {
@@ -119,7 +166,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     }
 
     /// Direct dependencies on suites declaring none are the closure, in declared order.
-    function testClosureOfDirectDependenciesIsThoseDependencies() external pure {
+    function testClosureOfDirectDependenciesIsThoseDependencies() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(A, hex"aa"), dep(B, hex"bb")));
         DeploySuite memory a = suiteAt("a", A, new DeployDependency[](0));
         DeploySuite memory b = suiteAt("b", B, new DeployDependency[](0));
@@ -131,7 +178,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     }
 
     /// A dependency's own dependencies are appended, through every hop, each with its declarer's code.
-    function testClosureAppendsTransitiveDependencies() external pure {
+    function testClosureAppendsTransitiveDependencies() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(A, hex"aa")));
         DeploySuite memory a = suiteAt("a", A, deps(dep(B, hex"bb")));
         DeploySuite memory b = suiteAt("b", B, deps(dep(C, hex"cc")));
@@ -145,7 +192,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     }
 
     /// A released suite and a candidate at one address each contribute their dependencies, released first.
-    function testClosureTakesTheReleasedAndTheCandidateAtOneAddress() external pure {
+    function testClosureTakesTheReleasedAndTheCandidateAtOneAddress() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(A, hex"aa")));
         DeploySuite memory released = suiteAt("a@0_0_1", A, deps(dep(B, hex"bb")));
         DeploySuite memory candidate = suiteAt("a", A, deps(dep(C, hex"cc")));
@@ -163,7 +210,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     }
 
     /// An external deployment, reached directly or through a suite, is in the closure and adds nothing past it.
-    function testClosureEndsAtAnExternalDeployment() external pure {
+    function testClosureEndsAtAnExternalDeployment() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(EXTERNAL, hex"e1"), dep(A, hex"aa")));
         DeploySuite memory a = suiteAt("a", A, deps(dep(EXTERNAL, hex"e2"), dep(B, hex"bb")));
         DeploySuite memory b = suiteAt("b", B, new DeployDependency[](0));
@@ -211,7 +258,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     }
 
     /// One address declared twice by the suite keeps its first entry's code.
-    function testClosureKeepsTheFirstOfTwoDirectEntriesAtOneAddress() external pure {
+    function testClosureKeepsTheFirstOfTwoDirectEntriesAtOneAddress() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(A, hex"a1"), dep(A, hex"a2")));
         DeploySuite memory a = suiteAt("a", A, new DeployDependency[](0));
 
@@ -222,7 +269,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     }
 
     /// An address the suite declares and a dependency declares again keeps the suite's entry.
-    function testClosureKeepsTheSuitesEntryOverATransitiveOneAtTheSameAddress() external pure {
+    function testClosureKeepsTheSuitesEntryOverATransitiveOneAtTheSameAddress() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(A, hex"aa"), dep(B, hex"b1")));
         DeploySuite memory a = suiteAt("a", A, deps(dep(B, hex"b2")));
         DeploySuite memory b = suiteAt("b", B, new DeployDependency[](0));
@@ -231,5 +278,90 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
             closureOf(suites(a, b), suites(subject), new ExternalDeployment[](0), subject),
             deps(dep(A, hex"aa"), dep(B, hex"b1"))
         );
+    }
+
+    function checkClosureThroughPerNetworkSibling(address recorded) internal view {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(recorded, hex"70")));
+        DeploySuite memory p = perNetworkSuiteAt("p", PER_NETWORK_FIRST, PER_NETWORK_LATER, deps(dep(B, hex"bb")));
+        DeploySuite memory b = suiteAt("b", B, new DeployDependency[](0));
+
+        assertClosure(
+            closureOf(suites(p, b), suites(subject), new ExternalDeployment[](0), subject),
+            deps(dep(recorded, hex"70"), dep(B, hex"bb"))
+        );
+    }
+
+    /// A dependency at the address a per-network suite records on its first network takes that suite's dependencies.
+    function testClosureReachesAPerNetworkSiblingThroughItsFirstNetworksAddress() external view {
+        checkClosureThroughPerNetworkSibling(PER_NETWORK_FIRST);
+    }
+
+    /// A dependency at the address a per-network suite records on a later network takes that suite's dependencies.
+    function testClosureReachesAPerNetworkSiblingThroughALaterNetworksAddress() external view {
+        checkClosureThroughPerNetworkSibling(PER_NETWORK_LATER);
+    }
+
+    /// A per-network suite whose closure reaches the address it records on a later network is a cycle.
+    function testClosureRefusesACycleThroughAPerNetworkSuitesLaterAddress() external {
+        DeploySuite memory p = perNetworkSuiteAt("p", PER_NETWORK_FIRST, PER_NETWORK_LATER, deps(dep(A, hex"aa")));
+        DeploySuite memory a = suiteAt("a", A, deps(dep(PER_NETWORK_LATER, hex"71")));
+
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p"));
+        this.closureOf(suites(a), suites(p), new ExternalDeployment[](0), p);
+    }
+
+    /// A per-network suite declaring the address it records on its first network is a cycle.
+    function testClosureRefusesAPerNetworkSuiteDependingOnItsFirstNetworksAddress() external {
+        DeploySuite memory p =
+            perNetworkSuiteAt("p", PER_NETWORK_FIRST, PER_NETWORK_LATER, deps(dep(PER_NETWORK_FIRST, hex"70")));
+
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "p"));
+        this.closureOf(new DeploySuite[](0), suites(p), new ExternalDeployment[](0), p);
+    }
+
+    /// A suite with no networks records no address, so a dependency at its stored address is unknown.
+    function testClosureRefusesADependencyOnASuiteWithoutNetworks() external {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(A, hex"aa")));
+        DeploySuite memory a = withoutNetworks(suiteAt("a", A, deps(dep(B, hex"bb"))));
+        DeploySuite memory b = suiteAt("b", B, new DeployDependency[](0));
+
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "subject", A));
+        this.closureOf(suites(a, b), suites(subject), new ExternalDeployment[](0), subject);
+    }
+
+    /// A suite with no networks records no address of its own, so its stored address is unknown, not a cycle.
+    function testClosureOfASuiteWithoutNetworksTakesNoAddressAsItsOwn() external {
+        DeploySuite memory subject = withoutNetworks(suiteAt("subject", SUBJECT, deps(dep(SUBJECT, hex"55"))));
+
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "subject", SUBJECT));
+        this.closureOf(new DeploySuite[](0), suites(subject), new ExternalDeployment[](0), subject);
+    }
+
+    /// A zero dependency no suite records and no external deployment is at is unknown.
+    function testClosureRefusesAZeroDependencyNothingRecords() external {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(address(0), hex"00")));
+
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "subject", address(0)));
+        this.closureOf(new DeploySuite[](0), suites(subject), oneExternal(), subject);
+    }
+
+    /// A zero dependency resolves to a suite recording zero, taking its dependencies.
+    function testClosureReachesASuiteRecordingZeroThroughAZeroDependency() external view {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(address(0), hex"00")));
+        DeploySuite memory zero = suiteAt("zero", address(0), deps(dep(B, hex"bb")));
+        DeploySuite memory b = suiteAt("b", B, new DeployDependency[](0));
+
+        assertClosure(
+            closureOf(suites(zero, b), suites(subject), new ExternalDeployment[](0), subject),
+            deps(dep(address(0), hex"00"), dep(B, hex"bb"))
+        );
+    }
+
+    /// A suite recording zero that declares a zero dependency is a cycle.
+    function testClosureRefusesAZeroDependencyOfASuiteRecordingZero() external {
+        DeploySuite memory zero = suiteAt("zero", address(0), deps(dep(address(0), hex"00")));
+
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "zero"));
+        this.closureOf(new DeploySuite[](0), suites(zero), new ExternalDeployment[](0), zero);
     }
 }

@@ -7,7 +7,8 @@ import {
     DeployDeclaration,
     DeployDependency,
     DeploySuite,
-    ExternalDeployment
+    ExternalDeployment,
+    UnknownDependency
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     DependencyRuntimeCodeMismatch,
@@ -474,5 +475,105 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
 
     function testPerNetworkSiblingDependencyOnALaterNetworkWithOtherRuntimeCodeMismatches() external {
         checkPerNetworkRuntimeCodeMismatch(LATER_NETWORK_ADDRESS, recording(PER_NETWORK_ADDRESS, LATER_NETWORK_ADDRESS));
+    }
+
+    function externalRuntimeCodeCheck(DeploySuite memory suite) external view {
+        checkDependencyRuntimeCodeIsKnown(declarationWith(suite));
+    }
+
+    function externalRuntimeCodeCheckAmong(DeploySuite memory suite, ExternalDeployment[] memory externals)
+        external
+        view
+    {
+        DeployDeclaration memory d = declarationWith(suite);
+        d.externalDeployments = externals;
+        checkDependencyRuntimeCodeIsKnown(d);
+    }
+
+    function externalRuntimeCodeCheckWithRelease(DeploySuite memory suite, DeploySuite memory release) external view {
+        DeployDeclaration memory d = declarationWith(suite);
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = release;
+        LibRainDeployDeclaration.addReleased(d, released);
+        checkDependencyRuntimeCodeIsKnown(d);
+    }
+
+    function externalAtTheSibling(bytes32 codeHash) internal pure returns (ExternalDeployment[] memory) {
+        ExternalDeployment[] memory externals = new ExternalDeployment[](1);
+        externals[0] = ExternalDeployment({deployedAddress: MOCK_DEPLOYABLE_ADDRESS, codeHash: codeHash});
+        return externals;
+    }
+
+    function testDependencyAtASiblingAndAnExternalMatchingBothIsKnown() external view {
+        bytes memory code = type(MockDeployable).runtimeCode;
+        DeployDeclaration memory d = declarationWith(dependingOn(MOCK_DEPLOYABLE_ADDRESS, code));
+        d.externalDeployments = externalAtTheSibling(keccak256(code));
+        checkDependencyRuntimeCodeIsKnown(d);
+    }
+
+    function testDependencyAtASiblingAndAnExternalIsHeldToTheExternalsHash() external {
+        bytes memory code = type(MockDeployable).runtimeCode;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DependencyRuntimeCodeMismatch.selector, SUITE, MOCK_DEPLOYABLE_ADDRESS, keccak256(code), keccak256(STOP)
+            )
+        );
+        this.externalRuntimeCodeCheckAmong(
+            dependingOn(MOCK_DEPLOYABLE_ADDRESS, code), externalAtTheSibling(keccak256(STOP))
+        );
+    }
+
+    function testDependencyAtASiblingAndAnExternalIsHeldToTheSiblingsHash() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DependencyRuntimeCodeMismatch.selector,
+                SUITE,
+                MOCK_DEPLOYABLE_ADDRESS,
+                keccak256(STOP),
+                keccak256(type(MockDeployable).runtimeCode)
+            )
+        );
+        this.externalRuntimeCodeCheckAmong(
+            dependingOn(MOCK_DEPLOYABLE_ADDRESS, STOP), externalAtTheSibling(keccak256(STOP))
+        );
+    }
+
+    function stopRelease() internal pure returns (DeploySuite memory) {
+        DeploySuite memory release = leafSuite("mock-deployable@0_0_1");
+        release.storedBytecodeHash = keccak256(STOP);
+        return release;
+    }
+
+    function testDependencyAtTwoSuitesIsHeldToTheReleasesHash() external {
+        bytes memory code = type(MockDeployable).runtimeCode;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DependencyRuntimeCodeMismatch.selector, SUITE, MOCK_DEPLOYABLE_ADDRESS, keccak256(code), keccak256(STOP)
+            )
+        );
+        this.externalRuntimeCodeCheckWithRelease(dependingOn(MOCK_DEPLOYABLE_ADDRESS, code), stopRelease());
+    }
+
+    function testDependencyAtTwoSuitesIsHeldToTheCandidatesHash() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DependencyRuntimeCodeMismatch.selector,
+                SUITE,
+                MOCK_DEPLOYABLE_ADDRESS,
+                keccak256(STOP),
+                keccak256(type(MockDeployable).runtimeCode)
+            )
+        );
+        this.externalRuntimeCodeCheckWithRelease(dependingOn(MOCK_DEPLOYABLE_ADDRESS, STOP), stopRelease());
+    }
+
+    function testZeroDependencyRuntimeCodeIsUnknown() external {
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, SUITE, address(0)));
+        this.externalRuntimeCodeCheck(dependingOn(address(0), ""));
+    }
+
+    function testRuntimeCodeCheckRefusesAZeroRecordedAddress() external {
+        vm.expectRevert(abi.encodeWithSelector(ZeroRecordedAddress.selector, PER_NETWORK, perNetworkChainId(0)));
+        this.externalPerNetworkRuntimeCodeCheck(dependingOn(address(0), ""), recording(address(0)));
     }
 }
