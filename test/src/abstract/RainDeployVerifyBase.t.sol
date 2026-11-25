@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {
+    DependencyCycle,
     DeployDeclaration,
     DeployDependency,
     DeploySuite,
@@ -252,9 +253,9 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         );
     }
 
-    /// The SUBJECT is deployed and never etched, whatever the declaration says
-    /// about its address.
-    function testDerivationDoesNotEtchTheSubject() external {
+    /// The SUBJECT is never etched: a declared dependency at its address is a
+    /// cycle, refused before anything is etched.
+    function testDerivationRefusesADependencyAtTheSubjectsAddress() external {
         address[] memory addresses = new address[](1);
         addresses[0] = FIRST_DEPENDENCY;
         bytes memory creationCode = dependentCreationCode(addresses);
@@ -266,11 +267,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         // The subject's own address, carrying code that is not the subject's.
         dependencies[1] = DeployDependency({deployedAddress: subject, runtimeCode: type(MockDeployable).runtimeCode});
 
-        DerivedDeploy memory derived = deriveDeployment(declaration(), dependentSuite(creationCode, dependencies));
-
-        assertEq(derived.deployedAddresses[0], subject);
-        assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
-        assertNotEq(derived.bytecodeHash, keccak256(type(MockDeployable).runtimeCode));
+        vm.expectRevert(abi.encodeWithSelector(DependencyCycle.selector, "a-dependent-key"));
+        this.externalDeriveDeployment(dependentSuite(creationCode, dependencies));
     }
 
     /// A declaration MUST NOT replace the Zoltu factory bytecode the derivation

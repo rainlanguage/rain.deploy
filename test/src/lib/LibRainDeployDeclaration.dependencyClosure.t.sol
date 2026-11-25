@@ -475,11 +475,11 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
         vm.removeDir(root, true);
     }
 
-    function deployLocallyOf(DeploySuite[] memory released, DeploySuite memory suite)
+    function deployLocallyOf(DeploySuite[] memory candidates, DeploySuite memory suite)
         external
         returns (address[] memory)
     {
-        DeployDeclaration memory d = declarationOf(released, new DeploySuite[](0), new ExternalDeployment[](0));
+        DeployDeclaration memory d = declarationOf(new DeploySuite[](0), candidates, new ExternalDeployment[](0));
         return LibMockCreate2Mechanism.deployLocally(d, vm, suite);
     }
 
