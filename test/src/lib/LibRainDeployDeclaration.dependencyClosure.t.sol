@@ -405,9 +405,10 @@ contract LibRainDeployDeclarationDependencyClosureTest is Test {
     /// An undeclared suite records no address of its own, so a dependency at its own address is unknown, not a cycle.
     function testClosureOfAnUndeclaredSuiteRefusesItsOwnAddressAsUnknown() external {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(SUBJECT, hex"55")));
+        DeploySuite memory a = suiteAt("a", A, new DeployDependency[](0));
 
         vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "subject", SUBJECT));
-        this.closureOf(new DeploySuite[](0), new DeploySuite[](0), new ExternalDeployment[](0), subject);
+        this.closureOf(new DeploySuite[](0), suites(a), new ExternalDeployment[](0), subject);
     }
 
     /// A release broadcast to a network only its candidate records deploys at the address its own salt derives there,
