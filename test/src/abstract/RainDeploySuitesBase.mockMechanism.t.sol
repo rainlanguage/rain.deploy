@@ -357,9 +357,10 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
     }
 
     function testCheckNetworksFrozenRefusesAListedNetworkTheSuiteRecordsNothingOn() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
         DeploySuite memory onNetworks = partlyRecorded();
         vm.expectRevert(abi.encodeWithSelector(UnrecordedOnNetwork.selector, onNetworks.suite, uint256(137)));
-        sDeploy.externalCheckNetworksFrozen(sDeploy.externalMockRelease(), onNetworks, arbitrumAndPolygon());
+        sDeploy.externalCheckNetworksFrozen(release, onNetworks, arbitrumAndPolygon());
     }
 
     /// The mechanism's verification log replaces the Zoltu verify commands.
