@@ -88,6 +88,7 @@ library LibRainDeployZoltuMechanism {
         returns (bool, address)
     {
         checkMechanismData(suite);
+        // forge-lint: disable-next-line(boolean-cst)
         return (true, suite.storedDeployedAddress);
     }
 
