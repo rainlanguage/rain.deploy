@@ -12,7 +12,7 @@ import {
     DerivationSnapshotRevertFailed,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
-import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 
@@ -214,13 +214,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         address deployer = LibRainDeploy.rememberDeployer(vm, deployerPrivateKey);
         function(Vm, string memory, address, bytes memory) internal returns (address) step = deployStep(d, suite);
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
+        DeployDependency[] memory closure =
+            LibRainDeployDeclaration.dependencyClosure(d, suite, deploys.expectedAddresses);
         for (uint256 i = 0; i < configs.length; i++) {
-            LibRainDeploy.selectCheckedFork(
-                vm,
-                configs[i],
-                forkIds[i],
-                LibRainDeployDeclaration.dependencyClosure(d, suite, deploys.expectedAddresses)
-            );
+            LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], closure);
             preDeployCheck(d, suite, configs[i]);
             LibRainDeploy.deployStepToSelectedFork(
                 vm,
