@@ -30,7 +30,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);
         addExample(d);
-        d.externalDeployments = new ExternalDeployment[](4);
+        d.externalDeployments = new ExternalDeployment[](3);
         d.externalDeployments[0] = ExternalDeployment({
             deployedAddress: FIRST_DEPENDENCY, codeHash: keccak256(type(MockDeployable).runtimeCode)
         });
@@ -38,10 +38,6 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             deployedAddress: SECOND_DEPENDENCY, codeHash: keccak256(type(MockDeployable).runtimeCode)
         });
         d.externalDeployments[2] = ExternalDeployment({
-            deployedAddress: LibRainDeploy.zoltuAddress(dependentCreationCode(oneDependency())),
-            codeHash: keccak256(type(MockDependentDeployable).runtimeCode)
-        });
-        d.externalDeployments[3] = ExternalDeployment({
             deployedAddress: LibRainDeploy.ZOLTU_FACTORY, codeHash: LibRainDeploy.ZOLTU_FACTORY_CODEHASH
         });
         return d;
@@ -172,14 +168,6 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
                 DeployDependency({deployedAddress: addresses[i], runtimeCode: type(MockDeployable).runtimeCode});
         }
         return dependencies;
-    }
-
-    /// The first dependency address alone.
-    /// @return The addresses.
-    function oneDependency() internal pure returns (address[] memory) {
-        address[] memory addresses = new address[](1);
-        addresses[0] = FIRST_DEPENDENCY;
-        return addresses;
     }
 
     /// The two dependency addresses, in declaration order.
