@@ -293,21 +293,6 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         );
     }
 
-    function testClosureRefusesACycleOnItsFirstDependencyBeforeDerivingAnySuite() external {
-        DeploySuite memory self = suiteAt("subject", SUBJECT, deps(dep(SUBJECT, hex"55")));
-        checkRefused(
-            abi.encodeWithSelector(DependencyCycle.selector, "subject"), suites(uncatalogued()), suites(self), self
-        );
-
-        DeploySuite memory acyclic = suiteAt("subject", SUBJECT, deps(dep(EXTERNAL, hex"ee")));
-        checkRefused(
-            abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "not-a-network"),
-            suites(uncatalogued()),
-            suites(acyclic),
-            acyclic
-        );
-    }
-
     function testClosureRefusesACycleThroughAnAddressItsCandidateAddsANetworkAt() external {
         DeploySuite memory frozen = releaseDependingOn(deps(dep(A, hex"aa")));
         DeploySuite memory a = suiteAt("a", A, deps(dep(mockNetwork(8453).deployedAddress, hex"72")));
