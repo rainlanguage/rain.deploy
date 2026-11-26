@@ -17,7 +17,8 @@ import {
     MechanismUnclaimed,
     NoDeployCandidates,
     UnknownDependency,
-    UnqualifiedCandidateArtifactPath
+    UnqualifiedCandidateArtifactPath,
+    UnrecordedOnNetwork
 } from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 
@@ -64,10 +65,11 @@ library LibRainDeployDeclaration {
         return copied;
     }
 
-    /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`.
+    /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`, then its mechanism's
+    /// `addRecordedNetworks`. Each suite's mechanism, with its config, MUST already be in `d`.
     /// @param d The declaration, mutated.
     /// @param suites The released suites, copied before that fill.
-    function addReleased(DeployDeclaration memory d, DeploySuite[] memory suites) internal pure {
+    function addReleased(DeployDeclaration memory d, DeploySuite[] memory suites) internal view {
         DeploySuite[] memory released = new DeploySuite[](d.released.length + suites.length);
         for (uint256 i = 0; i < d.released.length; i++) {
             released[i] = d.released[i];
@@ -75,6 +77,7 @@ library LibRainDeployDeclaration {
         for (uint256 i = 0; i < suites.length; i++) {
             DeploySuite memory suite = abi.decode(abi.encode(suites[i]), (DeploySuite));
             fillNetworks(suite, d);
+            mechanismOf(d, suite).addRecordedNetworks(d, suite);
             released[d.released.length + i] = suite;
         }
         d.released = released;
@@ -383,19 +386,64 @@ library LibRainDeployDeclaration {
     }
 
     /// @param suite The suite.
-    /// @return The address its mechanism records for it on each of its `networks`, in order.
+    /// @return Whether its mechanism records an address for it on each of its `networks`, in order.
+    /// @return That address where it does, in the same order.
     function recordedAddresses(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        view
+        returns (bool[] memory, address[] memory)
+    {
+        uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
+        DeployMechanismHandler memory mechanism = mechanismOf(d, suite);
+        bool[] memory recorded = new bool[](chainIds.length);
+        address[] memory addresses = new address[](chainIds.length);
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            (recorded[i], addresses[i]) = mechanism.recordedAddress(d, suite, chainIds[i]);
+        }
+        return (recorded, addresses);
+    }
+
+    /// @param recorded Whether each of `addresses` is recorded.
+    /// @param addresses The addresses, compacted in place.
+    /// @return The recorded entries of `addresses`, in order.
+    function onlyRecorded(bool[] memory recorded, address[] memory addresses) internal pure returns (address[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (recorded[i]) {
+                addresses[count++] = addresses[i];
+            }
+        }
+        assembly ("memory-safe") {
+            mstore(addresses, count)
+        }
+        return addresses;
+    }
+
+    /// @param suite The suite.
+    /// @return The address its mechanism records for it on each of its `networks` it records one on, in order.
+    function recordedOnly(DeployDeclaration memory d, DeploySuite memory suite)
         internal
         view
         returns (address[] memory)
     {
-        uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
-        DeployMechanismHandler memory mechanism = mechanismOf(d, suite);
-        address[] memory addresses = new address[](chainIds.length);
-        for (uint256 i = 0; i < chainIds.length; i++) {
-            addresses[i] = mechanism.recordedAddress(d, suite, chainIds[i]);
+        (bool[] memory recorded, address[] memory addresses) = recordedAddresses(d, suite);
+        return onlyRecorded(recorded, addresses);
+    }
+
+    /// @param suite The suite.
+    /// @param chainId The chain.
+    /// @return The address its mechanism records for it on `chainId`, refusing `UnrecordedOnNetwork` where it records
+    /// none.
+    function recordedAddress(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId)
+        internal
+        view
+        returns (address)
+    {
+        (bool recorded, address recordedAt) = mechanismOf(d, suite).recordedAddress(d, suite, chainId);
+        if (!recorded) {
+            revert UnrecordedOnNetwork(suite.suite, chainId);
         }
-        return addresses;
+        return recordedAt;
     }
 
     /// @param addresses The addresses.
@@ -412,7 +460,7 @@ library LibRainDeployDeclaration {
 
     /// The indexes of every suite recording `dependency` on one of its networks and of every external deployment at
     /// it, refusing `UnknownDependency` naming `declaring` where there is neither.
-    /// @param recorded Each suite's `recordedAddresses`.
+    /// @param recorded Each suite's `recordedOnly`.
     function resolveDependency(
         address[][] memory recorded,
         ExternalDeployment[] memory externals,
@@ -459,7 +507,7 @@ library LibRainDeployDeclaration {
         address[][] memory recorded = new address[][](suites.length);
         uint256 bound = suite.dependencies.length;
         for (uint256 i = 0; i < suites.length; i++) {
-            recorded[i] = recordedAddresses(d, suites[i]);
+            recorded[i] = recordedOnly(d, suites[i]);
             bound += suites[i].dependencies.length;
         }
         DeployDependency[] memory closure = new DeployDependency[](bound);

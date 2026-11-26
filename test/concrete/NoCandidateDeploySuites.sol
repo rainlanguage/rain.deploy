@@ -28,7 +28,7 @@ import {
 /// trivial reason that there is nothing declared at all. Everything except the
 /// candidate is present and correct.
 contract NoCandidateDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

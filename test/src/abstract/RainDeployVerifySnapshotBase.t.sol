@@ -86,7 +86,7 @@ import {
 /// DECLARATION — `SourceMismatchDeploy` — which is also the shape a repo holding
 /// a stale generated file is actually in.
 contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVerifySnapshotBase {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

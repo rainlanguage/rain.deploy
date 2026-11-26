@@ -228,7 +228,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @param suites Every suite of `d`.
-    /// @return The address each suite's mechanism records on each of its networks.
+    /// @return The address each suite's mechanism records on each of its networks it records one on.
     function siblingDeployments(DeployDeclaration memory d, DeploySuite[] memory suites)
         internal
         view
@@ -240,12 +240,13 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
         address[][] memory deployments = new address[][](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
             uint256[] memory chainIds = suiteChainIds(suites[i]);
-            deployments[i] = recordedAddresses(d, suites[i]);
+            (bool[] memory recorded, address[] memory addresses) = recordedAddresses(d, suites[i]);
             for (uint256 j = 0; j < chainIds.length; j++) {
-                if (deployments[i][j] == address(0)) {
+                if (recorded[j] && addresses[j] == address(0)) {
                     revert ZeroRecordedAddress(suites[i].suite, chainIds[j]);
                 }
             }
+            deployments[i] = LibRainDeployDeclaration.onlyRecorded(recorded, addresses);
         }
         return deployments;
     }

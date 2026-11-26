@@ -317,7 +317,7 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// The retired `AddressRegistry` releases are required only on the networks they were live on at retirement,
     /// the other releases cut before `zerog` joined only on the networks before it, and every other suite on every
     /// declared network.
-    function testReleasesAreRequiredOnlyWhereTheyWereCutFor() external pure {
+    function testReleasesAreRequiredOnlyWhereTheyWereCutFor() external view {
         DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
         string[] memory live = addressRegistryNetworks();

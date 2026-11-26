@@ -79,9 +79,9 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function checkInternallyConsistent(DeployDeclaration memory d, DeploySuite memory suite) internal {
         DerivedDeploy memory derived = deriveDeployment(d, suite);
 
-        address[] memory recorded = recordedAddresses(d, suite);
+        (bool[] memory isRecorded, address[] memory recorded) = recordedAddresses(d, suite);
         for (uint256 i = 0; i < recorded.length; i++) {
-            if (recorded[i] != derived.deployedAddresses[i]) {
+            if (isRecorded[i] && recorded[i] != derived.deployedAddresses[i]) {
                 revert StoredAddressMismatch(suite.suite, recorded[i], derived.deployedAddresses[i]);
             }
         }

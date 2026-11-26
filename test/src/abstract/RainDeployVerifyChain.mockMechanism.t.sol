@@ -131,12 +131,19 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         this.setMockRecordRoot(root);
     }
 
+    /// `mockRelease()` with its records added, as `addReleased` declares it.
+    function recordedRelease() internal view returns (DeploySuite memory) {
+        DeploySuite memory release = mockRelease();
+        addRecordedNetworks(declaration(), release);
+        return release;
+    }
+
     function testChecksARecordedExtendedNetworkAtItsDeclaredAddress() external {
         string memory root = "test/generated-snapshot/mock-create2-verify-chain-extended";
         writeBaseRecord(root, mockRelease().suite);
         etchLive(42161);
         etchLive(8453);
-        this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE, mockRelease());
+        this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE, recordedRelease());
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
     }
@@ -190,40 +197,28 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON, release);
     }
 
-    function testAddRecordedNetworksRunsOncePerSuite() external {
+    /// The suites arrive with their records already added, so the chain group adds none.
+    function testChainGroupAddsNoRecordedNetworks() external {
         etchLive(42161);
         etchLive(137);
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = mockRelease();
         suites[1] = arbitrumOnlySuite();
 
-        vm.expectCall(
-            MOCK_MECHANISM_PROBE,
-            abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, suites[0].suite)),
-            1
-        );
-        vm.expectCall(
-            MOCK_MECHANISM_PROBE,
-            abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, suites[1].suite)),
-            1
-        );
+        vm.expectCall(MOCK_MECHANISM_PROBE, abi.encodeWithSelector(IMockMechanismProbe.addRecordedNetworks.selector), 0);
         this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), suites);
     }
 
-    /// The recorded network and the candidate's network are added to the copies the check reads, never to the
-    /// suites the caller holds.
+    /// A recorded network is checked without being added again to the suites the caller holds.
     function testCheckLeavesTheCallersSuitesUnchanged() external {
         string memory root = "test/generated-snapshot/mock-create2-verify-chain-unchanged";
         writeBaseRecord(root, mockRelease().suite);
         etchLive(42161);
         etchLive(8453);
         DeploySuite[] memory suites = new DeploySuite[](1);
-        suites[0] = mockRelease();
+        suites[0] = recordedRelease();
         bytes32 before = keccak256(abi.encode(suites));
-
-        DeploySuite memory recorded = mockRelease();
-        addRecordedNetworks(declaration(), recorded);
-        assertNotEq(keccak256(abi.encode(recorded)), keccak256(abi.encode(suites[0])), "nothing to add");
+        assertNotEq(keccak256(abi.encode(suites[0])), keccak256(abi.encode(mockRelease())), "nothing recorded");
 
         checkAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE), suites);
 

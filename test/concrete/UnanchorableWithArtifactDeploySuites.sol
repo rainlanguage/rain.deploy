@@ -32,7 +32,7 @@ import {VENDORED_CREATION_CODE} from "./UnanchorableDeploy.sol";
 /// refusal naming it is also what says the loop passes OVER an exemption rather
 /// than stopping at it.
 contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

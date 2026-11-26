@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
-import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite, UnrecordedOnNetwork} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {
@@ -23,6 +23,7 @@ import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {CallerHeldMockBroadcast} from "../../concrete/CallerHeldMockBroadcast.sol";
+import {UnrecordedMockCreate2Deploy} from "../../concrete/UnrecordedMockCreate2Deploy.sol";
 
 /// @title RainDeployBroadcastMockMechanismTest
 /// @notice `deployAndBroadcast`, `broadcastSuite` and the seat check over a per-network mechanism.
@@ -112,6 +113,29 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         assertFalse(anyForkExists());
     }
 
+    /// A network the release lists but records nothing on, which its candidate does not add, is refused before any
+    /// fork.
+    function testBroadcastRefusesAListedNetworkTheReleaseRecordsNothingOnBeforeAnyFork() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(release);
+        MockNetworkDeploy[] memory first = new MockNetworkDeploy[](1);
+        first[0] = mechanism.networks[0];
+        mechanism.networks = first;
+        release.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
+        vm.expectRevert(abi.encodeWithSelector(UnrecordedOnNetwork.selector, release.suite, uint256(137)));
+        sDeploy.externalDeployAndBroadcast(
+            vm, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), 1, release, release
+        );
+        assertFalse(anyForkExists());
+    }
+
+    function testNetworkDeploysRefusesANetworkTheMechanismRecordsNothingOn() external {
+        UnrecordedMockCreate2Deploy deploy = new UnrecordedMockCreate2Deploy();
+        DeploySuite memory release = deploy.externalMockRelease();
+        vm.expectRevert(abi.encodeWithSelector(UnrecordedOnNetwork.selector, release.suite, uint256(42161)));
+        deploy.externalNetworkDeploys(release, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON));
+    }
+
     /// A network the mechanism's own records add broadcasts at its recorded address.
     function testBroadcastsARecordedNetwork() external {
         string memory root = "test/generated-snapshot/broadcast-mock-recorded";
@@ -155,8 +179,8 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         assertFalse(anyForkExists());
     }
 
-    /// `broadcastSuite` asks the mechanism for its recorded networks exactly once.
-    function testBroadcastSuiteAddsRecordedNetworksOnce() external {
+    /// The one call is the declaration's `addReleased`; `broadcastSuite` adds no records of its own.
+    function testBroadcastSuiteAddsNoRecordedNetworksBeyondTheDeclarations() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
         vm.expectCall(
             MOCK_MECHANISM_PROBE,
@@ -167,8 +191,8 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         sDeploy.externalBroadcastSuite(release, new string[](0), 1);
     }
 
-    /// The mechanism's own records and the candidate's networks widen copies; the caller's suite and declaration are
-    /// what they were.
+    /// The candidate's networks widen copies; the declared release, its records added, and the declaration are what
+    /// they were.
     function testBroadcastSuiteLeavesTheCallersSuiteUnchanged() external {
         string memory root = "test/generated-snapshot/broadcast-mock-caller-held";
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -179,7 +203,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         recorded[0] =
             MockNetworkDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
         LibMockNetworkRecord.write(vm, root, deploy.externalMockRelease().suite, recorded);
-        assertEq(deploy.externalAddRecordedNetworks(deploy.externalMockRelease()).networks.length, 3);
+        assertEq(deploy.externalReleased()[0].networks.length, 3);
         vm.makePersistent(MOCK_CREATE2_FACTORY);
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;

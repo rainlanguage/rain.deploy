@@ -50,7 +50,7 @@ bytes constant ASSEMBLED_CREATION_CODE = hex"600160005360016000f3";
 /// The ordinary candidate is first and real, so this is the mixed declaration a
 /// repo actually has rather than one where nothing is anchored.
 contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

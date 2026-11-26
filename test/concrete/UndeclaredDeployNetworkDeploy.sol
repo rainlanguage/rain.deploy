@@ -13,7 +13,7 @@ string constant UNALIASED_DEPLOY_NETWORK = "unaliased";
 /// @title UndeclaredDeployNetworkDeploy
 /// The exemplar declaration narrowed to Arbitrum One, deploying to Arbitrum One, Base and a name that is no alias.
 contract UndeclaredDeployNetworkDeploy is ExampleDeployScript {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);

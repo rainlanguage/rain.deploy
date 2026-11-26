@@ -80,14 +80,16 @@ library LibRainDeployZoltuMechanism {
         return LibRainDeploy.zoltuAddress(suite.creationCode);
     }
 
+    /// @return Recorded, on every network.
     /// @return Its recorded address, on every network.
     function recordedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256)
         internal
         pure
-        returns (address)
+        returns (bool, address)
     {
         checkMechanismData(suite);
-        return suite.storedDeployedAddress;
+        // forge-lint: disable-next-line(boolean-cst)
+        return (true, suite.storedDeployedAddress);
     }
 
     /// @return Its creation code, on every network.
