@@ -10,7 +10,7 @@ import {MockCreate2DeploySuites} from "../abstract/MockCreate2DeploySuites.sol";
 import {LibMockCreate2Mechanism} from "../lib/LibMockCreate2Mechanism.sol";
 
 contract MockCreate2Deploy is MockCreate2DeploySuites, ExternalDeployBroadcast {
-    function declaration() internal view override returns (DeployDeclaration memory) {
+    function declaration() internal view virtual override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibMockCreate2Mechanism.extend(d);

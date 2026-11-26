@@ -98,11 +98,13 @@ library LibMockSaltMechanism {
     }
 
     /// @return Its one address, once per each of its `networks`.
-    function deployLocally(DeployDeclaration memory, Vm vm, DeploySuite memory suite)
+    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
     {
-        LibRainDeploy.etchDependencies(vm, suite.dependencies);
+        address[] memory own = new address[](1);
+        own[0] = deployedAddress(d, suite, 0);
+        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite, own);
         vm.etch(MOCK_CREATE2_FACTORY, type(MockCreate2Factory).runtimeCode);
         address one = MockCreate2Factory(MOCK_CREATE2_FACTORY).deploy(salt(suite), suite.creationCode);
         address[] memory deployed = new address[](suite.networks.length);
