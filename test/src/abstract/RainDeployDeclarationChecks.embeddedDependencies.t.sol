@@ -398,7 +398,7 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
     /// `addReleased` lists on both.
     function partlyRecordedDeclarationWith(DeploySuite memory suite, address recorded)
         internal
-        pure
+        view
         returns (DeployDeclaration memory)
     {
         DeployDeclaration memory d = perNetworkDeclarationWith(suite, recording(recorded, LATER_NETWORK_ADDRESS));

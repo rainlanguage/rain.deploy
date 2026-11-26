@@ -53,7 +53,7 @@ contract RainDeploySuitesBaseExtendChainTest is Test, TwoMechanismDeploySuites {
         return d;
     }
 
-    function testEveryLayersMechanismIsDeclaredInExtendOrder() external pure {
+    function testEveryLayersMechanismIsDeclaredInExtendOrder() external view {
         DeployDeclaration memory d = declaration();
         assertEq(d.mechanisms.length, 3);
         assertEq(d.mechanisms[0].id, ZOLTU_MECHANISM_ID);
@@ -61,19 +61,19 @@ contract RainDeploySuitesBaseExtendChainTest is Test, TwoMechanismDeploySuites {
         assertEq(d.mechanisms[2].id, MOCK_SALT_MECHANISM_ID);
     }
 
-    function testTheConsumersNetworksReplaceCoresDefault() external pure {
+    function testTheConsumersNetworksReplaceCoresDefault() external view {
         DeployDeclaration memory d = declaration();
         assertEq(d.networks, consumerNetworks());
         assertGt(LibRainDeploy.supportedNetworks().length, d.networks.length);
     }
 
-    function testSuitesNamingNoNetworksTakeTheConsumersNetworks() external pure {
+    function testSuitesNamingNoNetworksTakeTheConsumersNetworks() external view {
         DeployDeclaration memory d = declaration();
         assertEq(d.released[0].networks, consumerNetworks());
         assertEq(d.candidates[1].snapshot.networks, consumerNetworks());
     }
 
-    function testASuiteNamingItsNetworksKeepsThem() external pure {
+    function testASuiteNamingItsNetworksKeepsThem() external view {
         DeployDeclaration memory d = declaration();
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;

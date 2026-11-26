@@ -65,7 +65,7 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
 
     /// The declaration MUST really be narrower than the library's list, or
     /// every assertion below holds for a group that ignored it.
-    function assertNarrowerThanTheLibrary() internal pure {
+    function assertNarrowerThanTheLibrary() internal view {
         assertLt(
             declaration().networks.length,
             LibRainDeploy.supportedNetworks().length,

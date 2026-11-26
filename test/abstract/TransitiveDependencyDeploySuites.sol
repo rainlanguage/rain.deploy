@@ -66,7 +66,7 @@ abstract contract TransitiveDependencyDeploySuites is RainDeploySuitesBase {
         return suite;
     }
 
-    function declaredDependentSuite() internal pure returns (DeploySuite memory) {
+    function declaredDependentSuite() internal view returns (DeploySuite memory) {
         return declaration().candidates[0].snapshot;
     }
 }
