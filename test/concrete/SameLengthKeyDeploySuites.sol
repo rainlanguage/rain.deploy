@@ -31,7 +31,7 @@ import {
 /// a duplicate that is not one and select the wrong record for a key that does
 /// exist, which is the whole distance between a key and its length.
 contract SameLengthKeyDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

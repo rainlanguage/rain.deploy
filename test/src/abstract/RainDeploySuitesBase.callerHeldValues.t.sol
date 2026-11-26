@@ -179,9 +179,10 @@ contract RainDeploySuitesBaseCallerHeldValuesTest is Test, MockCreate2DeploySuit
         assertEq(declarationHash(d), declarationBefore);
     }
 
-    function testAddReleasedLeavesTheCallersSuitesUnfilledAndUnshared() external pure {
+    function testAddReleasedLeavesTheCallersSuitesUnfilledAndUnshared() external view {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = zoltuRelease();
         suites[0].networks = new string[](0);

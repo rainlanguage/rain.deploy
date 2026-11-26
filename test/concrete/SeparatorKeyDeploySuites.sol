@@ -22,7 +22,7 @@ import {
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 
 contract SeparatorKeyDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

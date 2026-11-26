@@ -18,7 +18,7 @@ import {MockDependencyReader, READ_DEPENDENCY} from "../concrete/MockDependencyR
 import {MockDependencyReaderCaller} from "../concrete/MockDependencyReaderCaller.sol";
 
 abstract contract TransitiveDependencyDeploySuites is RainDeploySuitesBase {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);
@@ -62,7 +62,7 @@ abstract contract TransitiveDependencyDeploySuites is RainDeploySuitesBase {
         return suite;
     }
 
-    function declaredDependentSuite() internal pure returns (DeploySuite memory) {
+    function declaredDependentSuite() internal view returns (DeploySuite memory) {
         return declaration().candidates[0].snapshot;
     }
 }

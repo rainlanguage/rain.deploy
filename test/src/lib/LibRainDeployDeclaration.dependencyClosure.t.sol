@@ -56,8 +56,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         returns (DeployDependency[] memory)
     {
         DeployDeclaration memory d = declarationOf(released, candidates);
-        return
-            LibRainDeployDeclaration.dependencyClosure(d, suite, LibRainDeployDeclaration.recordedAddresses(d, suite));
+        return LibRainDeployDeclaration.dependencyClosure(d, suite, LibRainDeployDeclaration.recordedOnly(d, suite));
     }
 
     function deployLocallyOf(DeploySuite[] memory candidates, DeploySuite memory suite) external {
@@ -200,6 +199,53 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         );
     }
 
+    /// A per-network release cut on Arbitrum One alone, listing Polygon too.
+    function partlyRecorded(string memory key, DeployDependency[] memory dependencies)
+        internal
+        view
+        returns (DeploySuite memory)
+    {
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
+        recorded[0] = mockNetwork(42161);
+        DeploySuite memory suite = mockSuite(key, recorded);
+        suite.networks = mockRelease().networks;
+        suite.dependencies = dependencies;
+        return suite;
+    }
+
+    function testClosureSkipsTheNetworksAnUnreachedSuiteRecordsNothingOn() external view {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(B, hex"bb")));
+
+        assertClosure(
+            closureOf(
+                suites(partlyRecorded("p@0_0_1", deps(dep(A, hex"aa"))), leafAt("b", B)), suites(subject), subject
+            ),
+            deps(dep(B, hex"bb"))
+        );
+    }
+
+    function testClosureReachesAPartlyRecordedSuiteThroughTheNetworkItRecords() external view {
+        address first = mockNetwork(42161).deployedAddress;
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(first, hex"70")));
+
+        assertClosure(
+            closureOf(
+                suites(partlyRecorded("p@0_0_1", deps(dep(B, hex"bb"))), leafAt("b", B)), suites(subject), subject
+            ),
+            deps(dep(first, hex"70"), dep(B, hex"bb"))
+        );
+    }
+
+    function testClosureResolvesNoZeroDependencyToANetworkASuiteRecordsNothingOn() external {
+        DeploySuite memory zero = suiteAt("subject", SUBJECT, deps(dep(address(0), hex"00")));
+        checkRefused(
+            abi.encodeWithSelector(UnknownDependency.selector, "subject", address(0)),
+            suites(partlyRecorded("p@0_0_1", deps(dep(B, hex"bb"))), leafAt("b", B)),
+            suites(zero),
+            zero
+        );
+    }
+
     function testClosureReachesASuiteRecordingZeroThroughAZeroDependency() external view {
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(address(0), hex"00")));
         DeploySuite memory zero = suiteAt("zero", address(0), deps(dep(B, hex"bb")));
@@ -275,6 +321,16 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         checkRefused(abi.encodeWithSelector(DependencyCycle.selector, "zero"), new DeploySuite[](0), suites(zero), zero);
     }
 
+    function testClosureRefusesACycleThroughTheNetworkAPartlyRecordedSuiteRecords() external {
+        DeploySuite memory partly = partlyRecorded("p@0_0_1", deps(dep(A, hex"aa")));
+        checkRefused(
+            abi.encodeWithSelector(DependencyCycle.selector, partly.suite),
+            suites(partly, suiteAt("a", A, deps(dep(mockNetwork(42161).deployedAddress, hex"70")))),
+            new DeploySuite[](0),
+            partly
+        );
+    }
+
     function testSuiteWithoutDependenciesDerivesNoOtherSuite() external {
         DeploySuite memory subject = mockSingleSuite("subject");
         subject.networks = new string[](1);
@@ -323,6 +379,25 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
 
         checkRefused(
             abi.encodeWithSelector(DependencyCycle.selector, frozen.suite), suites(frozen), suites(a), broadcast
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+    }
+
+    function testClosureReachesAReleaseThroughTheAddressItsRecordsAdd() external {
+        string memory root = "test/generated-snapshot/closure-recorded-dependency";
+        sMockRecordRoot = root;
+        DeploySuite memory release = releaseDependingOn(deps(dep(B, hex"bb")));
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
+        recorded[0] = mockNetwork(8453);
+        LibMockNetworkRecord.write(vm, root, release.suite, recorded);
+        DeployDeclaration memory d = declaration();
+        LibRainDeployDeclaration.addReleased(d, suites(release, leafAt("b", B)));
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(recorded[0].deployedAddress, hex"72")));
+
+        assertClosure(
+            LibRainDeployDeclaration.dependencyClosure(d, subject, LibRainDeployDeclaration.recordedOnly(d, subject)),
+            deps(dep(recorded[0].deployedAddress, hex"72"), dep(B, hex"bb"))
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);

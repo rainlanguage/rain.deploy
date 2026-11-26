@@ -52,7 +52,7 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     /// Adds `exampleReleased()` and `exampleCandidates()` to `d`.
     /// @param d The declaration, mutated.
-    function addExample(DeployDeclaration memory d) internal pure {
+    function addExample(DeployDeclaration memory d) internal view {
         LibRainDeployDeclaration.addReleased(d, exampleReleased());
         LibRainDeployDeclaration.addCandidates(d, exampleCandidates());
     }

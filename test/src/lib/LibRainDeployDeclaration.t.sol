@@ -120,8 +120,9 @@ contract LibRainDeployDeclarationTest is Test {
         assertEq(d.dispatchWorkflow, LibRainDeployDeclaration.DISPATCH_WORKFLOW);
     }
 
-    function testAddReleasedFillsUnsetNetworksWithAFreshCopy() external pure {
+    function testAddReleasedFillsUnsetNetworksWithAFreshCopy() external view {
         DeployDeclaration memory d;
+        LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = suiteNamed("a", new string[](0));
@@ -134,8 +135,9 @@ contract LibRainDeployDeclarationTest is Test {
         assertEq(d.networks[0], "alpha", "fill aliases d.networks");
     }
 
-    function testAddReleasedKeepsExplicitNetworks() external pure {
+    function testAddReleasedKeepsExplicitNetworks() external view {
         DeployDeclaration memory d;
+        LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         string[] memory own = oneNetwork("gamma");
         DeploySuite[] memory suites = new DeploySuite[](1);
@@ -148,8 +150,9 @@ contract LibRainDeployDeclarationTest is Test {
         assertNetworks(d.networks, twoNetworks(), "d.networks");
     }
 
-    function testAddReleasedAppendsInOrder() external pure {
+    function testAddReleasedAppendsInOrder() external view {
         DeployDeclaration memory d;
+        LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         DeploySuite[] memory first = new DeploySuite[](1);
         first[0] = suiteNamed("a", new string[](0));
@@ -166,8 +169,9 @@ contract LibRainDeployDeclarationTest is Test {
         assertEq(d.candidates.length, 0, "candidates touched");
     }
 
-    function testAddReleasedFillsFromTheCurrentNetworks() external pure {
+    function testAddReleasedFillsFromTheCurrentNetworks() external view {
         DeployDeclaration memory d;
+        LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.extend(d);
         LibRainDeployDeclaration.setNetworks(d, oneNetwork("narrowed"));
         DeploySuite[] memory suites = new DeploySuite[](1);

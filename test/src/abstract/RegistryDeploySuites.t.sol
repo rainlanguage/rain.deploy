@@ -50,7 +50,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// something nobody needs is deployed there first, with exactly the right
     /// code — and it fails at dispatch, per network, after the fork, where
     /// nothing in this suite is watching.
-    function testCandidatesDeclareNoDependencies() external pure {
+    function testCandidatesDeclareNoDependencies() external view {
         DeployCandidate[] memory candidates = checkedCandidateSuites(declaration());
         for (uint256 i = 0; i < candidates.length; i++) {
             assertEq(
@@ -343,7 +343,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// networks it was live on at retirement, every other release cut before
     /// `zerog` joined on the networks before it, and every candidate on every
     /// declared network, `zerog` included.
-    function testReleasesAreNarrowedToTheNetworksTheyWereCutFor() external pure {
+    function testReleasesAreNarrowedToTheNetworksTheyWereCutFor() external view {
         DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
         uint256 retired = 0;
@@ -416,7 +416,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// joined the roster, 0_1_37. 0_1_38 is the first release cut with `zerog`
     /// in its roster, so it and every later release are required on `zerog`,
     /// and no release up to the cutoff is.
-    function testReleasesAfterTheLastReleaseBeforeZerogAreRequiredOnZerog() external pure {
+    function testReleasesAfterTheLastReleaseBeforeZerogAreRequiredOnZerog() external view {
         DeployDeclaration memory d = declaration();
         uint256 atCutoff = 0;
         uint256 afterCutoff = 0;

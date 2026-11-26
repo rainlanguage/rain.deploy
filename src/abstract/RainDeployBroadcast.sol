@@ -104,8 +104,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         uint256 deployerPrivateKey
     ) internal returns (address[] memory, uint256[] memory) {
         address deployer = vm.addr(deployerPrivateKey);
-        DeploySuite memory frozen = abi.decode(abi.encode(suite), (DeploySuite));
-        addRecordedNetworks(d, frozen);
+        DeploySuite memory frozen = suite;
         (DeploySuite memory candidate, bool found) = candidateOf(d, frozen.suite);
         if (!found) {
             candidate = abi.decode(abi.encode(frozen), (DeploySuite));

@@ -7,17 +7,19 @@ import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySu
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 
 /// @title RegistryDeploySuitesRetiredNetworksTest
 /// @notice The retired address registry releases and the releases cut before `zerog` name their own networks, so a
 /// declaration whose networks differ from them fills only the later releases.
 contract RegistryDeploySuitesRetiredNetworksTest is Test, RegistryDeploySuites {
-    function testNarrowedReleasesKeepTheirNetworksUnderANarrowerDeclaration() external pure {
+    function testNarrowedReleasesKeepTheirNetworksUnderANarrowerDeclaration() external view {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         LibRainDeployDeclaration.setNetworks(d, networks);
+        LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.addReleased(d, registryReleasedSuites());
 
         string[] memory retiredNetworks = addressRegistryNetworks();

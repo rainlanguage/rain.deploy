@@ -26,7 +26,7 @@ import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 /// that read the library's first entry would be on arbitrum. Neither reads as
 /// base.
 contract ExampleDeployNarrowNetworks is ExampleDeployScript {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);

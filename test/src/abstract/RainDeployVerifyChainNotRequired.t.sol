@@ -27,7 +27,7 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
     }
 
     /// @dev The second release on base alone; everything else everywhere.
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);
@@ -48,7 +48,7 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
     }
 
     /// The fixture is only meaningful if base is not the first network walked.
-    function testBaseIsNotTheFirstSupportedNetwork() external pure {
+    function testBaseIsNotTheFirstSupportedNetwork() external view {
         assertNotEq(declaration().networks[0], LibRainDeploy.BASE);
     }
 

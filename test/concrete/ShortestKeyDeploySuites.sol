@@ -30,7 +30,7 @@ import {
 /// declaration while every other fixture still answers, and that is the whole
 /// distance between "absent" and "short".
 contract ShortestKeyDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

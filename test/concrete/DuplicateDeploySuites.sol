@@ -24,7 +24,7 @@ import {
 /// A declaration whose released suite and candidate share a key — the one thing
 /// a registry must refuse, because the key is what selects what gets broadcast.
 contract DuplicateDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

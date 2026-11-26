@@ -109,13 +109,15 @@ contract RainDeploySuitesBaseZoltuMechanismTest is Test {
     function testZoltuAnswersOneAddressOnEveryListedNetwork() external {
         DeploySuite memory zoltu = zoltuMockDeployableSuite("zoltu");
         address[] memory deployed = sDeploy.externalDeployedAddresses(zoltu);
-        address[] memory recorded = sDeploy.externalRecordedAddresses(zoltu);
+        (bool[] memory isRecorded, address[] memory recorded) = sDeploy.externalRecordedAddresses(zoltu);
         address[] memory local = sDeploy.externalDeployLocally(vm, zoltu);
         assertEq(deployed.length, 2);
+        assertEq(isRecorded.length, 2);
         assertEq(recorded.length, 2);
         assertEq(local.length, 2);
         for (uint256 i = 0; i < 2; i++) {
             assertEq(deployed[i], LibRainDeploy.zoltuAddress(zoltu.creationCode));
+            assertTrue(isRecorded[i]);
             assertEq(recorded[i], zoltu.storedDeployedAddress);
             assertEq(local[i], deployed[i]);
         }

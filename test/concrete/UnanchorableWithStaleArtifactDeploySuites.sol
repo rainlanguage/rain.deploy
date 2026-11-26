@@ -30,7 +30,7 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// `CandidateSourceMismatch` here and is satisfied by the field everywhere a
 /// record happens to agree.
 contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);
