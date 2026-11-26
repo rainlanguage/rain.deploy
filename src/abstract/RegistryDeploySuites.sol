@@ -86,7 +86,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// release and each release up to `LAST_RELEASE_BEFORE_ZEROG` required only on `networksBeforeZerog()`,
     /// `registryCandidates()` and `parameterisedContractNames()` as the frozen code records.
     /// @return The declaration.
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory declared;
         LibRainDeployDeclaration.extend(declared);
         LibRainDeployZoltuMechanism.extend(declared);

@@ -36,9 +36,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
 
     /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Every
     /// mechanism's `checkNetworks` runs first, before the frozen checks, derivations and forks; with no suites only
-    /// the networks some mechanism returned are forked, and with none nothing is. Each suite is checked with its
-    /// recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds (`addCandidateNetworks`);
-    /// the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s refusals before any network
+    /// the networks some mechanism returned are forked, and with none nothing is. Each suite is checked with the
+    /// networks in play its candidate adds (`addCandidateNetworks`); the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s refusals before any network
     /// is forked on each network it is required on, and `checkOnChain`'s on each selected fork it is required on.
     /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before forking, and on each network it is
     /// required on `checkEmittedAt`'s refusals at its declared emission block and `checkDescribes`'s at its address.
@@ -71,12 +70,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
 
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(networks);
-        DeploySuite[] memory frozen = new DeploySuite[](suites.length);
+        DeploySuite[] memory frozen = suites;
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
-            frozen[j] = abi.decode(abi.encode(suites[j]), (DeploySuite));
-            addRecordedNetworks(d, frozen[j]);
-            onNetworks[j] = abi.decode(abi.encode(frozen[j]), (DeploySuite));
+            onNetworks[j] = abi.decode(abi.encode(suites[j]), (DeploySuite));
             addCandidateNetworks(d, onNetworks[j], chainIds);
         }
         suites = onNetworks;

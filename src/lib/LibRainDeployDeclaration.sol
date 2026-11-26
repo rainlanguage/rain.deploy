@@ -65,10 +65,11 @@ library LibRainDeployDeclaration {
         return copied;
     }
 
-    /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`.
+    /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`, then its mechanism's
+    /// `addRecordedNetworks`. Each suite's mechanism, with its config, MUST already be in `d`.
     /// @param d The declaration, mutated.
     /// @param suites The released suites, copied before that fill.
-    function addReleased(DeployDeclaration memory d, DeploySuite[] memory suites) internal pure {
+    function addReleased(DeployDeclaration memory d, DeploySuite[] memory suites) internal view {
         DeploySuite[] memory released = new DeploySuite[](d.released.length + suites.length);
         for (uint256 i = 0; i < d.released.length; i++) {
             released[i] = d.released[i];
@@ -76,6 +77,7 @@ library LibRainDeployDeclaration {
         for (uint256 i = 0; i < suites.length; i++) {
             DeploySuite memory suite = abi.decode(abi.encode(suites[i]), (DeploySuite));
             fillNetworks(suite, d);
+            mechanismOf(d, suite).addRecordedNetworks(d, suite);
             released[d.released.length + i] = suite;
         }
         d.released = released;
