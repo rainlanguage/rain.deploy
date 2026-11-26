@@ -419,7 +419,11 @@ library LibRainDeployDeclaration {
 
     /// @param suite The suite.
     /// @return The address its mechanism records for it on each of its `networks` it records one on, in order.
-    function recordedOnly(DeployDeclaration memory d, DeploySuite memory suite) internal view returns (address[] memory) {
+    function recordedOnly(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        view
+        returns (address[] memory)
+    {
         (bool[] memory recorded, address[] memory addresses) = recordedAddresses(d, suite);
         return onlyRecorded(recorded, addresses);
     }
