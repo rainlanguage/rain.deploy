@@ -133,6 +133,12 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         return release;
     }
 
+    function uncatalogued() internal pure returns (DeploySuite memory) {
+        DeploySuite memory suite = leafAt("uncatalogued", A);
+        suite.networks[0] = "not-a-network";
+        return suite;
+    }
+
     function copy(DeploySuite memory suite) internal pure returns (DeploySuite memory) {
         return abi.decode(abi.encode(suite), (DeploySuite));
     }
@@ -267,6 +273,39 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
 
         DeploySuite memory zero = suiteAt("zero", address(0), deps(dep(address(0), hex"00")));
         checkRefused(abi.encodeWithSelector(DependencyCycle.selector, "zero"), new DeploySuite[](0), suites(zero), zero);
+    }
+
+    function testSuiteWithoutDependenciesDerivesNoOtherSuite() external {
+        DeploySuite memory subject = mockSingleSuite("subject");
+        subject.networks = new string[](1);
+        subject.networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        assertEq(closureOf(suites(uncatalogued()), suites(subject), subject).length, 0);
+        this.deployLocallyOf(suites(uncatalogued(), subject), subject);
+        assertEq(subject.storedDeployedAddress.code, subject.storedRuntimeCode);
+
+        subject.dependencies = deps(dep(EXTERNAL, hex"ee"));
+        checkRefused(
+            abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "not-a-network"),
+            suites(uncatalogued()),
+            suites(subject),
+            subject
+        );
+    }
+
+    function testClosureRefusesACycleOnItsFirstDependencyBeforeDerivingAnySuite() external {
+        DeploySuite memory self = suiteAt("subject", SUBJECT, deps(dep(SUBJECT, hex"55")));
+        checkRefused(
+            abi.encodeWithSelector(DependencyCycle.selector, "subject"), suites(uncatalogued()), suites(self), self
+        );
+
+        DeploySuite memory acyclic = suiteAt("subject", SUBJECT, deps(dep(EXTERNAL, hex"ee")));
+        checkRefused(
+            abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "not-a-network"),
+            suites(uncatalogued()),
+            suites(acyclic),
+            acyclic
+        );
     }
 
     function testClosureRefusesACycleThroughAnAddressItsCandidateAddsANetworkAt() external {
