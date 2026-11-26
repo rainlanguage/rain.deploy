@@ -2,7 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDeclaration,
+    DeploySuite,
+    ExternalDeployment
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
@@ -14,13 +19,14 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// @notice The chain matrix holds every released suite's declared dependencies to the code declared
 /// for them on each network, before the suite's own address.
 contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployDeclaration.setNetworks(d, declaredNetworks());
         LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.addReleased(d, declaredReleased());
         LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        d.externalDeployments = declaredExternals();
         return d;
     }
 
@@ -29,6 +35,24 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
 
     /// Where the release's one declared dependency is.
     address constant DEPENDENCY = address(uint160(0xDE9E4DE4C1));
+
+    /// Polygon's system contract code hash as read from the Polygon fork, zero until read.
+    bytes32 internal sPolygonSystemContractCodeHash;
+
+    /// `DEPENDENCY`, then Polygon's system contract once its code hash has been read from Polygon.
+    /// @return The external deployments.
+    function declaredExternals() internal view returns (ExternalDeployment[] memory) {
+        bool polygonRead = sPolygonSystemContractCodeHash != bytes32(0);
+        ExternalDeployment[] memory externals = new ExternalDeployment[](polygonRead ? 2 : 1);
+        externals[0] =
+            ExternalDeployment({deployedAddress: DEPENDENCY, codeHash: keccak256(type(MockDeployableV2).runtimeCode)});
+        if (polygonRead) {
+            externals[1] = ExternalDeployment({
+                deployedAddress: POLYGON_SYSTEM_CONTRACT, codeHash: sPolygonSystemContractCodeHash
+            });
+        }
+        return externals;
+    }
 
     function declaredNetworks() internal pure returns (string[] memory) {
         string[] memory networks = new string[](2);
@@ -90,7 +114,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// The release with one more declared dependency.
     /// @param dependency The dependency to add.
     /// @return The release, as the one suite to check.
-    function releaseDeclaring(DeployDependency memory dependency) internal pure returns (DeploySuite[] memory) {
+    function releaseDeclaring(DeployDependency memory dependency) internal view returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = declaration().released[0];
         DeployDependency[] memory dependencies = new DeployDependency[](suites[0].dependencies.length + 1);
@@ -102,12 +126,13 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
         return suites;
     }
 
-    /// Polygon's system contract code, read from Polygon.
+    /// Polygon's system contract code, read from Polygon, recording its code hash.
     /// @return The code.
     function polygonSystemContractCode() internal returns (bytes memory) {
         vm.createSelectFork(LibRainDeploy.POLYGON);
         bytes memory code = POLYGON_SYSTEM_CONTRACT.code;
         assertGt(code.length, 0, "Polygon's system contract");
+        sPolygonSystemContractCodeHash = keccak256(code);
         return code;
     }
 

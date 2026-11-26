@@ -125,7 +125,7 @@ error CandidateSourceCompiles(string suite, string artifactPath);
 
 /// Thrown when the state snapshot taken around a local deploy could not be
 /// reverted. A local deploy plants code at the derived address, clears its
-/// nonce and etches the suite's declared dependencies; if that cannot be
+/// nonce and etches the suite's dependency closure; if that cannot be
 /// undone, every later local deploy reads state this one created, and the
 /// chain-anchored checks compare a locally planted deployment against itself,
 /// and the broadcast seat check reads a deployment planted under an earlier
@@ -162,6 +162,13 @@ error LegacyRecordAmbiguous(string path);
 /// Thrown when two of the declaration's mechanisms share an id.
 /// @param id The shared id.
 error DuplicateMechanism(bytes32 id);
+
+/// @param suite The suite.
+/// @param dependency A declared dependency that is neither a sibling nor an external deployment.
+error UnknownDependency(string suite, address dependency);
+
+/// @param suite The suite whose dependency closure reaches its own address.
+error DependencyCycle(string suite);
 
 /// One deployable unit.
 struct DeploySuite {
@@ -210,19 +217,8 @@ struct DeploySuite {
     /// declared state, and resolving to one refuses it. It is still held to
     /// `<path>:<Name>`, which it spells against the file it WOULD have.
     string artifactPath;
-    /// What MUST already be on a network before this suite is broadcast there:
-    /// an address and the runtime code that belongs at it, per dependency.
-    /// Ordinarily other suites' recorded pins — a constructor that bakes in a
-    /// beacon, or a fallback that delegatecalls a facet, silently produces a
-    /// broken deployment if its target is absent.
-    ///
-    /// The code half is a CLAIM about every network, and it is checked as one.
-    /// `RainDeployVerifyBase.deriveDeployment` etches it so that such a
-    /// constructor can run at all, which makes this suite's derived code hash a
-    /// function of what is declared here; `LibRainDeploy.deployToNetworks`
-    /// hashes the live code at each address against it, per network, before it
-    /// broadcasts anything. So a wrong declaration is a red deploy run rather
-    /// than a wrong hash frozen into a release.
+    /// What this suite's own code or mechanism data reaches, each address with the runtime code that MUST be at it;
+    /// local deploys and broadcast fork checks hold the transitive closure of these.
     DeployDependency[] dependencies;
     /// What the suite's mechanism needs: `abi.encode(id, payload)` for the mechanism with that id, Zoltu's included.
     bytes mechanismData;
@@ -579,12 +575,7 @@ abstract contract RainDeploySuitesBase {
         view
         returns (address[] memory)
     {
-        uint256[] memory chainIds = suiteChainIds(suite);
-        address[] memory addresses = new address[](chainIds.length);
-        for (uint256 i = 0; i < chainIds.length; i++) {
-            addresses[i] = recordedAddress(d, suite, chainIds[i]);
-        }
-        return addresses;
+        return LibRainDeployDeclaration.recordedAddresses(d, suite);
     }
 
     /// `checkNetworkFrozen` on each of `networks` among `onNetworks`' networks, with its recorded address there.
@@ -618,8 +609,7 @@ abstract contract RainDeploySuitesBase {
     /// that is not `<path>:<Name>`.
     ///
     /// The ONE place `NoDeployCandidates` and
-    /// `UnqualifiedCandidateArtifactPath` are raised, and the only way anything
-    /// reads the candidates. `allSuites` goes through it, and so does
+    /// `UnqualifiedCandidateArtifactPath` are raised. `allSuites` goes through it, and so does
     /// `checkCandidatesAnchoredToSource` — which matters, because the source
     /// anchor loops over the candidates and a loop over an empty list passes.
     /// Guarding each reader separately would be two spellings of one rule, and
@@ -713,32 +703,7 @@ abstract contract RainDeploySuitesBase {
     /// @param index Position in `allSuites()`, for the refusal to name.
     /// @param suite The key to check.
     function checkSuiteKey(uint256 index, string memory suite) internal pure {
-        bytes memory key = bytes(suite);
-        // Where the tag starts, and zero until an `@` is seen. Zero is not a
-        // position a tag can start at, because an `@` opening the key leaves
-        // the name half empty and is refused below.
-        uint256 tagStart = 0;
-
-        for (uint256 i = 0; i < key.length; i++) {
-            bytes1 char = key[i];
-            if (char == "@") {
-                if (i == 0 || tagStart != 0) {
-                    revert InvalidDeploySuiteKey(index, suite);
-                }
-                tagStart = i + 1;
-            } else {
-                bool nameAlphabet = (char >= "a" && char <= "z") || char == "-";
-                bool tagAlphabet = (char >= "0" && char <= "9") || char == "_";
-                if (!(nameAlphabet || (tagStart != 0 && tagAlphabet))) {
-                    revert InvalidDeploySuiteKey(index, suite);
-                }
-            }
-        }
-
-        // The empty key and a trailing at sign: the loop only refuses bytes that are there.
-        if (tagStart == key.length) {
-            revert InvalidDeploySuiteKey(index, suite);
-        }
+        LibRainDeployDeclaration.checkSuiteKey(index, suite);
     }
 
     /// Every suite this repo declares: the released ones followed by the
@@ -758,28 +723,7 @@ abstract contract RainDeploySuitesBase {
     /// perfectly and still be the same key.
     /// @return A fresh array: the released suites themselves, each candidate snapshot copied.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = d.released;
-        checkCandidates(d);
-        DeployCandidate[] memory candidates = d.candidates;
-
-        DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
-        for (uint256 i = 0; i < released.length; i++) {
-            suites[i] = released[i];
-        }
-        for (uint256 i = 0; i < candidates.length; i++) {
-            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
-        }
-
-        for (uint256 i = 0; i < suites.length; i++) {
-            checkSuiteKey(i, suites[i].suite);
-            for (uint256 j = i + 1; j < suites.length; j++) {
-                if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
-                    revert DuplicateDeploySuite(suites[i].suite);
-                }
-            }
-        }
-
-        return suites;
+        return LibRainDeployDeclaration.allSuites(d);
     }
 
     /// Every declared key, comma separated, for the unknown-suite error.

@@ -12,8 +12,9 @@ import {
     DerivationSnapshotRevertFailed,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
-import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
+import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
@@ -85,7 +86,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     }
 
     /// Refuses `checkSeatsNoDeployKey`'s refusals before reading any network (so the suite's constructor MUST succeed
-    /// locally, with only its declared dependencies etched, under each chain id that check reads), then broadcasts the
+    /// locally, with its dependency closure etched, under each chain id that check reads), then broadcasts the
     /// selected suite by ITS mechanism, through the mechanism hooks — the same dispatch every verification group
     /// derives through, so what is broadcast is what was verified. `suite` is not changed.
     /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before any fork, and once deployed on
@@ -213,8 +214,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         address deployer = LibRainDeploy.rememberDeployer(vm, deployerPrivateKey);
         function(Vm, string memory, address, bytes memory) internal returns (address) step = deployStep(d, suite);
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
+        DeployDependency[] memory closure =
+            LibRainDeployDeclaration.dependencyClosure(d, suite, deploys.expectedAddresses);
         for (uint256 i = 0; i < configs.length; i++) {
-            LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], suite.dependencies);
+            LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], closure);
             preDeployCheck(d, suite, configs[i]);
             LibRainDeploy.deployStepToSelectedFork(
                 vm,
@@ -302,7 +305,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
     /// Deploys `suite` locally with `deployer` as sender and origin, once under each of `chainIds`, and refuses
     /// `SuiteSeatsDeployKey` when the address deployed for that chain id answers `owner()` with a first word whose
-    /// low 160 bits are `deployer`. The suite's constructor runs on the local EVM with only its declared dependencies
+    /// low 160 bits are `deployer`. The suite's constructor runs on the local EVM with its dependency closure
     /// etched, so it MUST succeed there under each chain id: one that reverts locally (say, by calling an undeclared
     /// contract under one chain id) refuses the broadcast to every network with its revert.
     /// @param suite The suite to broadcast, with its recorded networks and every network its candidate adds.
