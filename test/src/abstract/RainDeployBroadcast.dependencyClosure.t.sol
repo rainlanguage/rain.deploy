@@ -44,7 +44,9 @@ contract RainDeployBroadcastDependencyClosureTest is Test {
         LocalForkVm forkVm = new LocalForkVm();
 
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, READ_DEPENDENCY)
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, READ_DEPENDENCY
+            )
         );
         sDeploy.externalDeployAndBroadcast(Vm(address(forkVm)), arbitrum(), 1, suite, suite);
     }
