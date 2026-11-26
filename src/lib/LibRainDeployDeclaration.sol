@@ -197,8 +197,7 @@ library LibRainDeployDeclaration {
     /// that is not `<path>:<Name>`.
     ///
     /// The ONE place `NoDeployCandidates` and
-    /// `UnqualifiedCandidateArtifactPath` are raised, and the only way anything
-    /// reads the candidates. `allSuites` goes through it, and so does
+    /// `UnqualifiedCandidateArtifactPath` are raised. `allSuites` goes through it, and so does
     /// `checkCandidatesAnchoredToSource` — which matters, because the source
     /// anchor loops over the candidates and a loop over an empty list passes.
     /// Guarding each reader separately would be two spellings of one rule, and
@@ -354,17 +353,8 @@ library LibRainDeployDeclaration {
 
     /// The released suites then a copy of each candidate snapshot, refusing an invalid or repeated key.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = d.released;
         checkCandidates(d);
-        DeployCandidate[] memory candidates = d.candidates;
-
-        DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
-        for (uint256 i = 0; i < released.length; i++) {
-            suites[i] = released[i];
-        }
-        for (uint256 i = 0; i < candidates.length; i++) {
-            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
-        }
+        DeploySuite[] memory suites = releasedThenCandidates(d);
 
         for (uint256 i = 0; i < suites.length; i++) {
             checkSuiteKey(i, suites[i].suite);
@@ -375,6 +365,20 @@ library LibRainDeployDeclaration {
             }
         }
 
+        return suites;
+    }
+
+    /// The released suites then a copy of each candidate snapshot, unchecked.
+    function releasedThenCandidates(DeployDeclaration memory d) private pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory released = d.released;
+        DeployCandidate[] memory candidates = d.candidates;
+        DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
+        for (uint256 i = 0; i < released.length; i++) {
+            suites[i] = released[i];
+        }
+        for (uint256 i = 0; i < candidates.length; i++) {
+            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
+        }
         return suites;
     }
 
@@ -447,16 +451,18 @@ library LibRainDeployDeclaration {
         view
         returns (DeployDependency[] memory)
     {
-        DeploySuite[] memory suites = allSuites(d);
+        DeploySuite[] memory suites = releasedThenCandidates(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         address[][] memory recorded = new address[][](suites.length);
+        uint256 bound = suite.dependencies.length;
         for (uint256 i = 0; i < suites.length; i++) {
             recorded[i] = recordedAddresses(d, suites[i]);
+            bound += suites[i].dependencies.length;
         }
-        DeployDependency[] memory closure = new DeployDependency[](0);
-        string[] memory declarers = new string[](0);
-        (closure, declarers) = appendNew(closure, declarers, suite.dependencies, suite.suite);
-        for (uint256 i = 0; i < closure.length; i++) {
+        DeployDependency[] memory closure = new DeployDependency[](bound);
+        string[] memory declarers = new string[](bound);
+        uint256 count = appendNew(closure, declarers, 0, suite.dependencies, suite.suite);
+        for (uint256 i = 0; i < count; i++) {
             if (holds(own, closure[i].deployedAddress)) {
                 revert DependencyCycle(suite.suite);
             }
@@ -464,8 +470,12 @@ library LibRainDeployDeclaration {
                 resolveDependency(recorded, externals, declarers[i], closure[i].deployedAddress);
             for (uint256 j = 0; j < suiteIndexes.length; j++) {
                 DeploySuite memory reached = suites[suiteIndexes[j]];
-                (closure, declarers) = appendNew(closure, declarers, reached.dependencies, reached.suite);
+                count = appendNew(closure, declarers, count, reached.dependencies, reached.suite);
             }
+        }
+        assembly ("memory-safe") {
+            mstore(closure, count)
+            mstore(declarers, count)
         }
         return closure;
     }
@@ -473,32 +483,22 @@ library LibRainDeployDeclaration {
     function appendNew(
         DeployDependency[] memory closure,
         string[] memory declarers,
+        uint256 count,
         DeployDependency[] memory deps,
         string memory declarer
-    ) private pure returns (DeployDependency[] memory, string[] memory) {
+    ) private pure returns (uint256) {
         for (uint256 i = 0; i < deps.length; i++) {
-            address dependency = deps[i].deployedAddress;
-            bool seen = false;
-            for (uint256 j = 0; j < closure.length; j++) {
-                if (closure[j].deployedAddress == dependency) {
-                    seen = true;
-                    break;
-                }
+            uint256 j = 0;
+            while (j < count && closure[j].deployedAddress != deps[i].deployedAddress) {
+                j++;
             }
-            if (!seen) {
-                DeployDependency[] memory grown = new DeployDependency[](closure.length + 1);
-                string[] memory grownDeclarers = new string[](closure.length + 1);
-                for (uint256 j = 0; j < closure.length; j++) {
-                    grown[j] = closure[j];
-                    grownDeclarers[j] = declarers[j];
-                }
-                grown[closure.length] = deps[i];
-                grownDeclarers[closure.length] = declarer;
-                closure = grown;
-                declarers = grownDeclarers;
+            if (j == count) {
+                closure[count] = deps[i];
+                declarers[count] = declarer;
+                count++;
             }
         }
-        return (closure, declarers);
+        return count;
     }
 
     /// Etches each dependency in `suite`'s dependency closure at its address.

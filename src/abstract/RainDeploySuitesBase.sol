@@ -609,8 +609,7 @@ abstract contract RainDeploySuitesBase {
     /// that is not `<path>:<Name>`.
     ///
     /// The ONE place `NoDeployCandidates` and
-    /// `UnqualifiedCandidateArtifactPath` are raised, and the only way anything
-    /// reads the candidates. `allSuites` goes through it, and so does
+    /// `UnqualifiedCandidateArtifactPath` are raised. `allSuites` goes through it, and so does
     /// `checkCandidatesAnchoredToSource` — which matters, because the source
     /// anchor loops over the candidates and a loop over an empty list passes.
     /// Guarding each reader separately would be two spellings of one rule, and
