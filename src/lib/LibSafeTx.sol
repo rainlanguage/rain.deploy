@@ -96,13 +96,36 @@ library LibSafeTx {
         });
     }
 
-    /// The hash owners sign for `safe` to execute the bundle `txs` at `nonce`.
+    /// The hash of `multiSendTx(txs)` for `safe` at `nonce`.
     /// @param safe The executing Safe.
     /// @param txs The bundle. Every entry MUST be a CALL.
     /// @param nonce The nonce the bundle consumes.
     /// @return The Safe transaction hash.
     function multiSendSafeTxHash(Safe safe, SafeTx[] memory txs, uint256 nonce) internal view returns (bytes32) {
         return safeTxHash(safe, multiSendTx(txs), nonce);
+    }
+
+    /// The single transaction a Safe executes `txs` as, the one the Safe
+    /// Transaction Builder proposes: a one-entry bundle is that entry called
+    /// directly, any other bundle is `multiSendTx(txs)`.
+    /// @param txs The bundle. Every entry MUST be a CALL.
+    /// @return The transaction.
+    function bundleTx(SafeTx[] memory txs) internal view returns (SafeTx memory) {
+        if (txs.length == 1) {
+            requireCall(0, txs[0].operation);
+            return txs[0];
+        }
+        return multiSendTx(txs);
+    }
+
+    /// The hash owners sign for `safe` to execute the bundle `txs` at `nonce`:
+    /// the hash of `bundleTx(txs)`.
+    /// @param safe The executing Safe.
+    /// @param txs The bundle. Every entry MUST be a CALL.
+    /// @param nonce The nonce the bundle consumes.
+    /// @return The Safe transaction hash.
+    function bundleSafeTxHash(Safe safe, SafeTx[] memory txs, uint256 nonce) internal view returns (bytes32) {
+        return safeTxHash(safe, bundleTx(txs), nonce);
     }
 
     /// `addrs` sorted ascending, in a new array.

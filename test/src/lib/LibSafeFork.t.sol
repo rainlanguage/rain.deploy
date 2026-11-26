@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {LibSafeFork} from "../../../src/lib/LibSafeFork.sol";
-import {SafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {LibSafeTx, SafeTx} from "../../../src/lib/LibSafeTx.sol";
 import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 import {OwnerManager} from "safe-global-safe-smart-account-1.4.1-3/contracts/base/OwnerManager.sol";
 import {Enum} from "safe-global-safe-smart-account-1.4.1-3/contracts/common/Enum.sol";
@@ -167,6 +167,44 @@ contract LibSafeForkTest is Test {
         assertEq(a.calls(1).value, 7);
         assertEq(a.calls(1).data, hex"cc");
         assertEq(address(safe).balance, 0);
+    }
+
+    /// A one-entry bundle executes as that entry called directly, as the Safe
+    /// UI proposes it: the Safe executes the direct CALL's hash, the target is
+    /// called by the Safe with the value and data, at one nonce.
+    function testExecuteBundleSingleIsDirectCall() external {
+        Safe safe = forkSafe(3, 2);
+        MockCallRecorder recorder = new MockCallRecorder();
+        vm.deal(address(safe), 5);
+        SafeTx[] memory txs = new SafeTx[](1);
+        txs[0] = SafeTx({to: address(recorder), value: 5, data: hex"aa", operation: Enum.Operation.Call});
+        uint256 nonce = safe.nonce();
+        bytes32 direct = safe.getTransactionHash(
+            address(recorder), 5, hex"aa", Enum.Operation.Call, 0, 0, 0, address(0), address(0), nonce
+        );
+        vm.expectEmit(address(safe));
+        emit Safe.ExecutionSuccess(direct, 0);
+        this.externalExecuteBundle(safe, txs);
+        assertEq(safe.nonce(), nonce + 1);
+        assertEq(recorder.callCount(), 1);
+        assertEq(recorder.calls(0).caller, address(safe));
+        assertEq(recorder.calls(0).value, 5);
+        assertEq(recorder.calls(0).data, hex"aa");
+        assertEq(address(recorder).balance, 5);
+        assertEq(address(safe).balance, 0);
+    }
+
+    /// A one-entry bundle that is not a CALL is refused before the Safe
+    /// executes anything.
+    function testExecuteBundleSingleRejectsDelegateCall() external {
+        Safe safe = forkSafe(2, 2);
+        MockCallRecorder recorder = new MockCallRecorder();
+        SafeTx[] memory txs = new SafeTx[](1);
+        txs[0] = SafeTx({to: address(recorder), value: 0, data: hex"aa", operation: Enum.Operation.DelegateCall});
+        vm.expectRevert(
+            abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, uint256(0), Enum.Operation.DelegateCall)
+        );
+        this.externalExecuteBundle(safe, txs);
     }
 
     /// One failing entry fails the whole bundle.
