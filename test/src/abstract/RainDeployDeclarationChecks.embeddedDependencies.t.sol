@@ -279,6 +279,8 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
 
     string constant PER_NETWORK = "mock-per-network";
 
+    string constant PER_NETWORK_RELEASE = "mock-per-network@0_0_1";
+
     function perNetworkChainId(uint256 index) internal pure returns (uint256) {
         return LibRainDeploy.supportedNetworkConfigs()[index].chainId;
     }
@@ -390,6 +392,65 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         this.externalPerNetworkCheck(
             suiteOf(creationCode, both()), recording(PER_NETWORK_ADDRESS, LATER_NETWORK_ADDRESS)
         );
+    }
+
+    /// `perNetworkDeclarationWith` on two networks, beside a per-network release cut on the first alone, which
+    /// `addReleased` lists on both.
+    function partlyRecordedDeclarationWith(DeploySuite memory suite, address recorded)
+        internal
+        pure
+        returns (DeployDeclaration memory)
+    {
+        DeployDeclaration memory d = perNetworkDeclarationWith(suite, recording(recorded, LATER_NETWORK_ADDRESS));
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = perNetworkSuite(recording(recorded));
+        released[0].suite = PER_NETWORK_RELEASE;
+        LibRainDeployDeclaration.addReleased(d, released);
+        return d;
+    }
+
+    function testSiblingDeploymentsSkipANetworkAReleaseListsButRecordsNothingOn() external view {
+        DeployDeclaration memory d = partlyRecordedDeclarationWith(
+            suiteOf(
+                bytes.concat(pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP), both()
+            ),
+            PER_NETWORK_ADDRESS
+        );
+        DeploySuite[] memory suites = allSuites(d);
+        address[][] memory siblings = siblingDeployments(d, suites);
+        assertEq(suites[0].suite, PER_NETWORK_RELEASE);
+        assertEq(suites[0].networks.length, 2);
+        assertEq(siblings[0].length, 1);
+        assertEq(siblings[0][0], PER_NETWORK_ADDRESS);
+    }
+
+    function testPerNetworkReleaseListingANetworkItRecordsNothingOnPasses() external view {
+        checkDependenciesAreTheEmbeddedDeployments(
+            partlyRecordedDeclarationWith(
+                suiteOf(
+                    bytes.concat(
+                        push(0, 32), pushAddress(MOCK_DEPLOYABLE_ADDRESS), pushAddress(MOCK_EXTERNAL_ADDRESS), STOP
+                    ),
+                    both()
+                ),
+                PER_NETWORK_ADDRESS
+            )
+        );
+    }
+
+    function externalPartlyRecordedRuntimeCodeCheck(DeploySuite memory suite) external view {
+        checkDependencyRuntimeCodeIsKnown(partlyRecordedDeclarationWith(suite, PER_NETWORK_ADDRESS));
+    }
+
+    function testDependencyOnAPartlyRecordedReleasesRecordedNetworkIsKnown() external view {
+        this.externalPartlyRecordedRuntimeCodeCheck(
+            dependingOn(PER_NETWORK_ADDRESS, perNetworkSuite(recording(PER_NETWORK_ADDRESS)).storedRuntimeCode)
+        );
+    }
+
+    function testZeroDependencyIsUnknownBesideANetworkAReleaseRecordsNothingOn() external {
+        vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, SUITE, address(0)));
+        this.externalPartlyRecordedRuntimeCodeCheck(dependingOn(address(0), ""));
     }
 
     function externalCheckOver(DeploySuite memory suite, string[] memory networks) external view {
