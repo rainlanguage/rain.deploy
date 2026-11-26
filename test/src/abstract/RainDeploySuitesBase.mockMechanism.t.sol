@@ -251,6 +251,13 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         assertEq(sDeploy.externalRecordedAddress(suite, 8453), networkAddress(8453));
     }
 
+    /// The release under a key the declaration does not hold, so only the call under test probes for it.
+    function undeclaredRelease() internal view returns (DeploySuite memory) {
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        release.suite = "mock-create-two@0_0_2";
+        return release;
+    }
+
     /// The mock reads its own records under the root in its payload, appending them in order.
     function testAddRecordedNetworksAppendsTheMechanismsOwnRecords() external {
         string memory root = "test/generated-snapshot/mock-create2-recorded";
@@ -260,7 +267,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         recorded[0] = network(8453, networkAddress(8453));
         recorded[1] = network(56, networkAddress(56));
         sDeploy.setMockRecordRoot(root);
-        DeploySuite memory release = sDeploy.externalMockRelease();
+        DeploySuite memory release = undeclaredRelease();
         LibMockNetworkRecord.write(vm, root, release.suite, recorded);
         vm.expectCall(
             MOCK_MECHANISM_PROBE,
@@ -279,7 +286,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
 
     /// Without a record root the mock adds nothing, but the hook still runs.
     function testAddRecordedNetworksWithoutRecordsAddsNothing() external {
-        DeploySuite memory release = sDeploy.externalMockRelease();
+        DeploySuite memory release = undeclaredRelease();
         vm.expectCall(
             MOCK_MECHANISM_PROBE,
             abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, release.suite)),

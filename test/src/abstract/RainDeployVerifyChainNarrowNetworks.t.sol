@@ -35,7 +35,7 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
 
     /// @dev ONE network, and base rather than either end of the library's
     /// list, so a run that ignored the declaration ends on arbitrum or polygon.
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);

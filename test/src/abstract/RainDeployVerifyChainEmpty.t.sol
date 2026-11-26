@@ -38,7 +38,7 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// scope is a second contract. `RainDeployVerifyChainTest` cannot be it — it
 /// declares two released suites so that the matrix has something to fail on.
 contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

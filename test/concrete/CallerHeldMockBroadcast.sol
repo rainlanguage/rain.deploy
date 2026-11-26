@@ -5,15 +5,15 @@ pragma solidity =0.8.25;
 import {DeployDeclaration, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {MockCreate2Deploy} from "./MockCreate2Deploy.sol";
 
-/// `broadcastSuite` over a suite the caller still holds.
+/// `broadcastSuite` over the declared release, as `run()` selects it.
 contract CallerHeldMockBroadcast is MockCreate2Deploy {
-    /// @return The hashes of the caller's suite and declaration before, then after, the broadcast.
+    /// @return The hashes of the declared release and the declaration before, then after, the broadcast.
     function broadcastRelease(string[] memory networks, uint256 key)
         external
         returns (bytes32, bytes32, bytes32, bytes32)
     {
         DeployDeclaration memory d = declaration();
-        DeploySuite memory suite = mockRelease();
+        DeploySuite memory suite = d.released[0];
         bytes32 suiteBefore = keccak256(abi.encode(suite));
         bytes32 declarationBefore = keccak256(abi.encode(d.released, d.candidates, d.networks));
         broadcastSuite(d, suite, networks, key);

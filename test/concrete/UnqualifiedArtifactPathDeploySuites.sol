@@ -32,7 +32,7 @@ import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMecha
 /// looked at the first candidate answers this declaration as if it were fine,
 /// and the position is what names the entry at fault.
 contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

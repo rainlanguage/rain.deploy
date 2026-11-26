@@ -27,7 +27,7 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
     }
 
     /// @dev The second release on base alone; everything else everywhere.
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

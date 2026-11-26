@@ -33,7 +33,7 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// One network, and the selected suite is keyed `second-address-candidate` for
 /// the reason `StalePinDeploy` gives.
 contract MultiSuiteDeploy is RainDeployBroadcast {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);

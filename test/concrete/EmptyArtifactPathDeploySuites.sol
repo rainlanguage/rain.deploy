@@ -29,7 +29,7 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// reason `UnqualifiedArtifactPathDeploySuites` puts its own there: a refusal reporting a fixed
 /// position would still pass a test that only asked whether it reverted.
 contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

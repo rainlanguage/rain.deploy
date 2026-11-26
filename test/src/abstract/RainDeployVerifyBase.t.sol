@@ -25,7 +25,7 @@ import {
 /// @title RainDeployVerifyBaseTest
 /// @notice What the derivation RETURNS, read directly, which no other group asks it for.
 contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

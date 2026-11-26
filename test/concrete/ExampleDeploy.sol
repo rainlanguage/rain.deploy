@@ -10,7 +10,7 @@ import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 /// @title ExampleDeploy
 /// `ExampleDeployScript` over the exemplar declaration as it stands.
 contract ExampleDeploy is ExampleDeployScript {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

@@ -29,7 +29,7 @@ import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMecha
 /// Offender SECOND, for the reason `UnqualifiedArtifactPathDeploySuites` puts
 /// its own there.
 contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

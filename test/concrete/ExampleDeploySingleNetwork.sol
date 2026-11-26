@@ -27,7 +27,7 @@ import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 /// the default, which is the difference an assertion can see. A single-element
 /// narrowing naming polygon would end on polygon either way and assert nothing.
 contract ExampleDeploySingleNetwork is ExampleDeployScript {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

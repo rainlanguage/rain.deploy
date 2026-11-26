@@ -44,7 +44,7 @@ import {
 /// are the whole of what the matrix runs over: a contract has exactly one
 /// declaration, so a second scope is a second contract.
 contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

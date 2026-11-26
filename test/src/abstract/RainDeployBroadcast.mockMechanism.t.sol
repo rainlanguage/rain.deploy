@@ -179,8 +179,8 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         assertFalse(anyForkExists());
     }
 
-    /// `broadcastSuite` asks the mechanism for its recorded networks exactly once.
-    function testBroadcastSuiteAddsRecordedNetworksOnce() external {
+    /// The one call is the declaration's `addReleased`; `broadcastSuite` adds no records of its own.
+    function testBroadcastSuiteAddsNoRecordedNetworksBeyondTheDeclarations() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
         vm.expectCall(
             MOCK_MECHANISM_PROBE,
@@ -191,8 +191,8 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         sDeploy.externalBroadcastSuite(release, new string[](0), 1);
     }
 
-    /// The mechanism's own records and the candidate's networks widen copies; the caller's suite and declaration are
-    /// what they were.
+    /// The candidate's networks widen copies; the declared release, its records added, and the declaration are what
+    /// they were.
     function testBroadcastSuiteLeavesTheCallersSuiteUnchanged() external {
         string memory root = "test/generated-snapshot/broadcast-mock-caller-held";
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -203,7 +203,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         recorded[0] =
             MockNetworkDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
         LibMockNetworkRecord.write(vm, root, deploy.externalMockRelease().suite, recorded);
-        assertEq(deploy.externalAddRecordedNetworks(deploy.externalMockRelease()).networks.length, 3);
+        assertEq(deploy.externalReleased()[0].networks.length, 3);
         vm.makePersistent(MOCK_CREATE2_FACTORY);
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;

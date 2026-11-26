@@ -37,7 +37,7 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// is green on exactly the file that is about to reach a chain — permanently
 /// green in a repo that has released nothing.
 contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBase {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

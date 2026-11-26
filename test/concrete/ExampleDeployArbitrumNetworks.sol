@@ -11,7 +11,7 @@ import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 /// @title ExampleDeployArbitrumNetworks
 /// The exemplar declaration narrowed to Arbitrum One alone, so a dispatch can reach a network outside it.
 contract ExampleDeployArbitrumNetworks is ExampleDeployScript {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);

@@ -19,7 +19,7 @@ import {MockDependentDeployable} from "../concrete/MockDependentDeployable.sol";
 address constant TRANSITIVE_DEPENDENCY = address(0xdef2);
 
 abstract contract TransitiveDependencyDeploySuites is RainDeploySuitesBase {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

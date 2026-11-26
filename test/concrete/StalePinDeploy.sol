@@ -33,7 +33,7 @@ address constant STALE_PIN_ADDRESS = address(0xdead);
 /// tests concurrently, so every write to it stays inside the one test that owns
 /// it.
 contract StalePinDeploy is RainDeployBroadcast {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

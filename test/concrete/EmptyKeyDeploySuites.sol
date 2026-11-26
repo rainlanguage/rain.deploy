@@ -38,7 +38,7 @@ import {
 /// of this fixture can see that the suite an unset variable reaches is a real
 /// deployable one and not a harmless duplicate of the one beside it.
 contract EmptyKeyDeploySuites is ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);

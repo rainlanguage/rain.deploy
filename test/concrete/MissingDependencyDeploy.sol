@@ -39,7 +39,7 @@ bytes constant ABSENT_DEPENDENCY_RUNTIME_CODE = hex"fe";
 /// rather than the first of the default roster. Keyed
 /// `second-address-candidate` for the reason `StalePinDeploy` gives.
 contract MissingDependencyDeploy is RainDeployBroadcast {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
+    function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         string[] memory networks = new string[](1);
