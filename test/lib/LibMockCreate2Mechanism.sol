@@ -198,17 +198,17 @@ library LibMockCreate2Mechanism {
     function recordedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256 chainId)
         internal
         pure
-        returns (address)
+        returns (bool, address)
     {
         MockCreate2Mechanism memory mechanism = decode(suite);
         if (!mechanism.perNetwork) {
-            return suite.storedDeployedAddress;
+            return (true, suite.storedDeployedAddress);
         }
         (bool found, uint256 index) = networkIndex(mechanism, chainId);
         if (!found) {
-            revert MockCreate2NetworkUndeclared(suite.suite, chainId);
+            return (false, address(0));
         }
-        return mechanism.networks[index].deployedAddress;
+        return (true, mechanism.networks[index].deployedAddress);
     }
 
     function deployStepData(DeployDeclaration memory, DeploySuite memory suite, uint256 chainId)

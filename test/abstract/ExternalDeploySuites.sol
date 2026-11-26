@@ -99,7 +99,8 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     function externalRecordedAddresses(DeploySuite memory suite) external view returns (address[] memory) {
-        return recordedAddresses(declaration(), suite);
+        (, address[] memory addresses) = recordedAddresses(declaration(), suite);
+        return addresses;
     }
 
     function externalDeployStepData(DeploySuite memory suite, uint256 chainId) external view returns (bytes memory) {

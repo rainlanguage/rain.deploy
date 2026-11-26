@@ -57,7 +57,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
     {
         DeployDeclaration memory d = declarationOf(released, candidates);
         return
-            LibRainDeployDeclaration.dependencyClosure(d, suite, LibRainDeployDeclaration.recordedAddresses(d, suite));
+            LibRainDeployDeclaration.dependencyClosure(d, suite, LibRainDeployDeclaration.recordedOnly(d, suite));
     }
 
     function deployLocallyOf(DeploySuite[] memory candidates, DeploySuite memory suite) external {

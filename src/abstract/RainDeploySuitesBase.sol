@@ -170,6 +170,10 @@ error UnknownDependency(string suite, address dependency);
 /// @param suite The suite whose dependency closure reaches its own address.
 error DependencyCycle(string suite);
 
+/// @param suite The suite.
+/// @param chainId A chain its mechanism records no address for it on.
+error UnrecordedOnNetwork(string suite, uint256 chainId);
+
 /// One deployable unit.
 struct DeploySuite {
     /// The key. Unique across every suite a repo declares, and held to the key
@@ -307,7 +311,8 @@ struct DeployMechanismHandler {
     bytes32 id;
     bytes config;
     function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (address) deployedAddress;
-    function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (address) recordedAddress;
+    function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (bool, address)
+        recordedAddress;
     function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;
     function(DeployDeclaration memory, DeploySuite memory)
         internal
@@ -467,7 +472,7 @@ abstract contract RainDeploySuitesBase {
         view
         returns (address)
     {
-        return mechanismOf(d, suite).recordedAddress(d, suite, chainId);
+        return LibRainDeployDeclaration.recordedAddress(d, suite, chainId);
     }
 
     function deployStepData(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId)
@@ -569,11 +574,12 @@ abstract contract RainDeploySuitesBase {
     }
 
     /// @param suite The suite.
-    /// @return The address it records for itself on each of its `networks`, in order.
+    /// @return Whether it records an address for itself on each of its `networks`, in order.
+    /// @return That address where it does, in the same order.
     function recordedAddresses(DeployDeclaration memory d, DeploySuite memory suite)
         internal
         view
-        returns (address[] memory)
+        returns (bool[] memory, address[] memory)
     {
         return LibRainDeployDeclaration.recordedAddresses(d, suite);
     }

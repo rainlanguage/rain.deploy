@@ -17,7 +17,8 @@ import {
     MechanismUnclaimed,
     NoDeployCandidates,
     UnknownDependency,
-    UnqualifiedCandidateArtifactPath
+    UnqualifiedCandidateArtifactPath,
+    UnrecordedOnNetwork
 } from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 
@@ -383,19 +384,60 @@ library LibRainDeployDeclaration {
     }
 
     /// @param suite The suite.
-    /// @return The address its mechanism records for it on each of its `networks`, in order.
+    /// @return Whether its mechanism records an address for it on each of its `networks`, in order.
+    /// @return That address where it does, in the same order.
     function recordedAddresses(DeployDeclaration memory d, DeploySuite memory suite)
         internal
         view
-        returns (address[] memory)
+        returns (bool[] memory, address[] memory)
     {
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
         DeployMechanismHandler memory mechanism = mechanismOf(d, suite);
+        bool[] memory recorded = new bool[](chainIds.length);
         address[] memory addresses = new address[](chainIds.length);
         for (uint256 i = 0; i < chainIds.length; i++) {
-            addresses[i] = mechanism.recordedAddress(d, suite, chainIds[i]);
+            (recorded[i], addresses[i]) = mechanism.recordedAddress(d, suite, chainIds[i]);
+        }
+        return (recorded, addresses);
+    }
+
+    /// @param recorded Whether each of `addresses` is recorded.
+    /// @param addresses The addresses, compacted in place.
+    /// @return The recorded entries of `addresses`, in order.
+    function onlyRecorded(bool[] memory recorded, address[] memory addresses) internal pure returns (address[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (recorded[i]) {
+                addresses[count++] = addresses[i];
+            }
+        }
+        assembly ("memory-safe") {
+            mstore(addresses, count)
         }
         return addresses;
+    }
+
+    /// @param suite The suite.
+    /// @return The address its mechanism records for it on each of its `networks` it records one on, in order.
+    function recordedOnly(DeployDeclaration memory d, DeploySuite memory suite) internal view returns (address[] memory) {
+        (bool[] memory recorded, address[] memory addresses) = recordedAddresses(d, suite);
+        return onlyRecorded(recorded, addresses);
+    }
+
+    /// @param suite The suite.
+    /// @param chainId The chain.
+    /// @return The address its mechanism records for it on `chainId`, refusing `UnrecordedOnNetwork` where it records
+    /// none.
+    function recordedAddress(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId)
+        internal
+        view
+        returns (address)
+    {
+        (bool recorded, address recordedAt) = mechanismOf(d, suite).recordedAddress(d, suite, chainId);
+        if (!recorded) {
+            revert UnrecordedOnNetwork(suite.suite, chainId);
+        }
+        return recordedAt;
     }
 
     /// @param addresses The addresses.
@@ -412,7 +454,7 @@ library LibRainDeployDeclaration {
 
     /// The indexes of every suite recording `dependency` on one of its networks and of every external deployment at
     /// it, refusing `UnknownDependency` naming `declaring` where there is neither.
-    /// @param recorded Each suite's `recordedAddresses`.
+    /// @param recorded Each suite's `recordedOnly`.
     function resolveDependency(
         address[][] memory recorded,
         ExternalDeployment[] memory externals,
@@ -459,7 +501,7 @@ library LibRainDeployDeclaration {
         address[][] memory recorded = new address[][](suites.length);
         uint256 bound = suite.dependencies.length;
         for (uint256 i = 0; i < suites.length; i++) {
-            recorded[i] = recordedAddresses(d, suites[i]);
+            recorded[i] = recordedOnly(d, suites[i]);
             bound += suites[i].dependencies.length;
         }
         DeployDependency[] memory closure = new DeployDependency[](bound);

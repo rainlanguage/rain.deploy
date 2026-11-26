@@ -76,9 +76,9 @@ library LibMockSaltMechanism {
     function recordedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256)
         internal
         pure
-        returns (address)
+        returns (bool, address)
     {
-        return suite.storedDeployedAddress;
+        return (true, suite.storedDeployedAddress);
     }
 
     function deployStepData(DeployDeclaration memory, DeploySuite memory suite, uint256)
