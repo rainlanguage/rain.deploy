@@ -7,7 +7,7 @@ import {ExternalDeployBroadcast} from "../abstract/ExternalDeployBroadcast.sol";
 import {TransitiveDependencyDeploySuites} from "../abstract/TransitiveDependencyDeploySuites.sol";
 
 contract TransitiveDependencyDeploy is TransitiveDependencyDeploySuites, ExternalDeployBroadcast {
-    function externalDependentSuite() external pure returns (DeploySuite memory) {
+    function externalDependentSuite() external view returns (DeploySuite memory) {
         return declaredDependentSuite();
     }
 

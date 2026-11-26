@@ -384,6 +384,25 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         vm.removeDir(root, true);
     }
 
+    function testClosureReachesAReleaseThroughTheAddressItsRecordsAdd() external {
+        string memory root = "test/generated-snapshot/closure-recorded-dependency";
+        sMockRecordRoot = root;
+        DeploySuite memory release = releaseDependingOn(deps(dep(B, hex"bb")));
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
+        recorded[0] = mockNetwork(8453);
+        LibMockNetworkRecord.write(vm, root, release.suite, recorded);
+        DeployDeclaration memory d = declaration();
+        LibRainDeployDeclaration.addReleased(d, suites(release, leafAt("b", B)));
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(recorded[0].deployedAddress, hex"72")));
+
+        assertClosure(
+            LibRainDeployDeclaration.dependencyClosure(d, subject, LibRainDeployDeclaration.recordedOnly(d, subject)),
+            deps(dep(recorded[0].deployedAddress, hex"72"), dep(B, hex"bb"))
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+    }
+
     function testLocalPerNetworkDeployOccupiesNoAddressOnANetworkItRecordsNothingOn() external {
         MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
         recorded[0] = mockNetwork(42161);

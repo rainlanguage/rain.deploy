@@ -27,7 +27,7 @@ import {
     MOCK_CREATE2_SALT,
     MockCreate2Mechanism
 } from "../../lib/LibMockCreate2Mechanism.sol";
-import {MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
+import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {MOCK_DEPLOYABLE_ADDRESS, MOCK_EXTERNAL_ADDRESS} from "../../concrete/MockReachingDeployable.sol";
 
 bytes constant STOP = hex"00";
@@ -446,6 +446,35 @@ contract RainDeployDeclarationChecksEmbeddedDependenciesTest is ReachingDeploySu
         this.externalPartlyRecordedRuntimeCodeCheck(
             dependingOn(PER_NETWORK_ADDRESS, perNetworkSuite(recording(PER_NETWORK_ADDRESS)).storedRuntimeCode)
         );
+    }
+
+    function testDependencyOnAnAddressAReleasesRecordsAddIsKnown() external {
+        string memory root = "test/generated-snapshot/embedded-recorded-dependency";
+        DeploySuite memory release = perNetworkSuite(recording(PER_NETWORK_ADDRESS));
+        release.suite = PER_NETWORK_RELEASE;
+        MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(release);
+        mechanism.root = root;
+        release.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
+        recorded[0] =
+            MockNetworkDeploy({chainId: perNetworkChainId(1), data: "", deployedAddress: LATER_NETWORK_ADDRESS});
+        LibMockNetworkRecord.write(vm, root, PER_NETWORK_RELEASE, recorded);
+        DeployDeclaration memory d = perNetworkDeclarationWith(
+            dependingOn(LATER_NETWORK_ADDRESS, release.storedRuntimeCode), recording(PER_NETWORK_ADDRESS)
+        );
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = release;
+        LibRainDeployDeclaration.addReleased(d, released);
+
+        checkDependencyRuntimeCodeIsKnown(d);
+        DeploySuite[] memory suites = allSuites(d);
+        address[][] memory siblings = siblingDeployments(d, suites);
+        assertEq(suites[0].suite, PER_NETWORK_RELEASE);
+        assertEq(siblings[0].length, 2);
+        assertEq(siblings[0][0], PER_NETWORK_ADDRESS);
+        assertEq(siblings[0][1], LATER_NETWORK_ADDRESS);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
     }
 
     function testZeroDependencyIsUnknownBesideANetworkAReleaseRecordsNothingOn() external {
