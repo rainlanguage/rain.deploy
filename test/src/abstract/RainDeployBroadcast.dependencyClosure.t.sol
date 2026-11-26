@@ -6,10 +6,9 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {TRANSITIVE_DEPENDENCY} from "../../abstract/TransitiveDependencyDeploySuites.sol";
 import {TransitiveDependencyDeploy} from "../../concrete/TransitiveDependencyDeploy.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
-import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {MockDependencyReader, READ_DEPENDENCY} from "../../concrete/MockDependencyReader.sol";
 
 contract RainDeployBroadcastDependencyClosureTest is Test {
     TransitiveDependencyDeploy internal sDeploy;
@@ -24,7 +23,7 @@ contract RainDeployBroadcastDependencyClosureTest is Test {
         return networks;
     }
 
-    /// The seat check runs a constructor reading a dependency only its declared sibling declares, leaving no etch.
+    /// The seat check runs a constructor calling a sibling that reads a dependency only it declares, leaving no etch.
     function testSeatCheckEtchesADependencyOfADeclaredDependency() external {
         DeploySuite memory suite = sDeploy.externalDependentSuite();
         address sibling = sDeploy.externalSiblingSuite().storedDeployedAddress;
@@ -34,20 +33,18 @@ contract RainDeployBroadcastDependencyClosureTest is Test {
         );
 
         assertEq(sibling.code.length, 0);
-        assertEq(TRANSITIVE_DEPENDENCY.code.length, 0);
+        assertEq(READ_DEPENDENCY.code.length, 0);
         assertEq(suite.storedDeployedAddress.code.length, 0);
     }
 
     /// A fork holding the declared sibling but not the dependency it declares is refused naming that dependency.
     function testBroadcastRefusesAForkMissingADependencyOfADeclaredDependency() external {
         DeploySuite memory suite = sDeploy.externalDependentSuite();
-        vm.etch(sDeploy.externalSiblingSuite().storedDeployedAddress, type(MockDeployable).runtimeCode);
+        vm.etch(sDeploy.externalSiblingSuite().storedDeployedAddress, type(MockDependencyReader).runtimeCode);
         LocalForkVm forkVm = new LocalForkVm();
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, TRANSITIVE_DEPENDENCY
-            )
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, READ_DEPENDENCY)
         );
         sDeploy.externalDeployAndBroadcast(Vm(address(forkVm)), arbitrum(), 1, suite, suite);
     }
