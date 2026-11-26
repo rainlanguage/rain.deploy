@@ -456,9 +456,10 @@ library LibRainDeployDeclaration {
         }
         DeploySuite[] memory suites = releasedThenCandidates(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
-        address[][] memory recorded;
+        address[][] memory recorded = new address[][](suites.length);
         uint256 bound = suite.dependencies.length;
         for (uint256 i = 0; i < suites.length; i++) {
+            recorded[i] = recordedAddresses(d, suites[i]);
             bound += suites[i].dependencies.length;
         }
         DeployDependency[] memory closure = new DeployDependency[](bound);
@@ -467,9 +468,6 @@ library LibRainDeployDeclaration {
         for (uint256 i = 0; i < count; i++) {
             if (holds(own, closure[i].deployedAddress)) {
                 revert DependencyCycle(suite.suite);
-            }
-            if (i == 0) {
-                recorded = recordedAddressesOfEach(d, suites);
             }
             (uint256[] memory suiteIndexes,) =
                 resolveDependency(recorded, externals, declarers[i], closure[i].deployedAddress);
@@ -483,18 +481,6 @@ library LibRainDeployDeclaration {
             mstore(declarers, count)
         }
         return closure;
-    }
-
-    function recordedAddressesOfEach(DeployDeclaration memory d, DeploySuite[] memory suites)
-        private
-        view
-        returns (address[][] memory)
-    {
-        address[][] memory recorded = new address[][](suites.length);
-        for (uint256 i = 0; i < suites.length; i++) {
-            recorded[i] = recordedAddresses(d, suites[i]);
-        }
-        return recorded;
     }
 
     function appendNew(
