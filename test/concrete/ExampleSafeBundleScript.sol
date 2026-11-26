@@ -9,9 +9,10 @@ import {SafeBundleScript} from "../../src/abstract/SafeBundleScript.sol";
 import {SafeTx} from "../../src/lib/LibSafeTx.sol";
 import {MockCallRecorder} from "./MockCallRecorder.sol";
 
-/// A bundle of two calls from a Safe into a call recorder, with each hook's
-/// behaviour set by the test so the inherited `run()` and `verify()` can be
-/// driven through every refusal. It keeps the default `assertReversible`.
+/// A bundle of two calls from a Safe into a call recorder, or of the first
+/// alone, with each hook's behaviour set by the test so the inherited `run()`
+/// and `verify()` can be driven through every refusal. It keeps the default
+/// `assertReversible`.
 contract ExampleSafeBundleScript is SafeBundleScript {
     /// `preflight` refuses.
     error NotAuthorable();
@@ -24,6 +25,7 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     MockCallRecorder internal sRecorder;
     string internal sArtifactPath;
     bool internal sRefusePreflight;
+    bool internal sFirstCallOnly;
     bytes internal sSecondCallData;
     uint256 internal sSecondCallValue;
 
@@ -40,6 +42,11 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     /// @param refuse Whether `preflight` refuses.
     function setRefusePreflight(bool refuse) external {
         sRefusePreflight = refuse;
+    }
+
+    /// @param firstCallOnly Whether the bundle is the first call alone.
+    function setFirstCallOnly(bool firstCallOnly) external {
+        sFirstCallOnly = firstCallOnly;
     }
 
     /// @param data The second call's data, so a test can change the bundle
@@ -72,8 +79,9 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     /// @dev Reverts `BundleUnderivable` in the state `preflight` refuses.
     function authorBundle() internal view override returns (SafeTx[] memory) {
         if (sRefusePreflight) revert BundleUnderivable();
-        SafeTx[] memory txs = new SafeTx[](2);
+        SafeTx[] memory txs = new SafeTx[](sFirstCallOnly ? 1 : 2);
         txs[0] = SafeTx({to: address(sRecorder), value: 0, data: "first", operation: Enum.Operation.Call});
+        if (sFirstCallOnly) return txs;
         txs[1] = SafeTx({
             to: address(sRecorder), value: sSecondCallValue, data: sSecondCallData, operation: Enum.Operation.Call
         });
@@ -83,7 +91,7 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     /// @inheritdoc SafeBundleScript
     function assertPostState() internal view override {
         uint256 callCount = sRecorder.callCount();
-        if (callCount != 2) revert PostStateMissing(callCount);
+        if (callCount != (sFirstCallOnly ? 1 : 2)) revert PostStateMissing(callCount);
     }
 
     /// @inheritdoc SafeBundleScript

@@ -32,6 +32,14 @@ contract LibSafeTxTest is Test {
         return LibSafeTx.multiSendTx(txs);
     }
 
+    function externalBundleTx(SafeTx[] memory txs) external view returns (SafeTx memory) {
+        return LibSafeTx.bundleTx(txs);
+    }
+
+    function externalBundleSafeTxHash(Safe safe, SafeTx[] memory txs, uint256 nonce) external view returns (bytes32) {
+        return LibSafeTx.bundleSafeTxHash(safe, txs, nonce);
+    }
+
     function externalApprovedHashSignatures(address[] memory signers) external pure returns (bytes memory) {
         return LibSafeTx.approvedHashSignatures(signers);
     }
@@ -160,6 +168,57 @@ contract LibSafeTxTest is Test {
         assertEq(uint8(wrapped.operation), uint8(Enum.Operation.DelegateCall));
         assertEq(wrapped.data, LibSafeTx.encodeMultiSend(txs));
         assertEq(LibSafeTx.multiSendSafeTxHash(safe, txs, 5), eip712(safe, wrapped, 5));
+    }
+
+    /// A one-entry bundle is that entry, executed directly, and its hash is the
+    /// entry's own EIP-712 hash, not the MultiSend's.
+    function testBundleTxSingleIsTheEntry(address to, uint256 value, bytes memory data, uint256 nonce) external {
+        Safe safe = forkSafe();
+        SafeTx[] memory txs = new SafeTx[](1);
+        txs[0] = SafeTx({to: to, value: value, data: data, operation: Enum.Operation.Call});
+        SafeTx memory direct = LibSafeTx.bundleTx(txs);
+        assertEq(direct.to, to);
+        assertEq(direct.value, value);
+        assertEq(direct.data, data);
+        assertEq(uint8(direct.operation), uint8(Enum.Operation.Call));
+        bytes32 hash = LibSafeTx.bundleSafeTxHash(safe, txs, nonce);
+        assertEq(hash, eip712(safe, txs[0], nonce));
+        assertNotEq(hash, LibSafeTx.multiSendSafeTxHash(safe, txs, nonce));
+    }
+
+    /// A one-entry bundle that is not a CALL is refused, naming index 0, both
+    /// as a transaction and as a hash.
+    function testBundleTxSingleRejectsDelegateCall() external {
+        Safe safe = forkSafe();
+        SafeTx[] memory txs = new SafeTx[](1);
+        txs[0] = SafeTx({to: address(0xbeef), value: 0, data: hex"01", operation: Enum.Operation.DelegateCall});
+        bytes memory refusal =
+            abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, uint256(0), Enum.Operation.DelegateCall);
+        vm.expectRevert(refusal);
+        this.externalBundleTx(txs);
+        vm.expectRevert(refusal);
+        this.externalBundleSafeTxHash(safe, txs, 0);
+    }
+
+    /// An empty bundle, or one of two or more entries, is its MultiSend
+    /// transaction, and its hash is the MultiSend hash.
+    function testBundleTxOtherwiseIsMultiSend(uint8 length, uint256 seed, uint256 nonce) external {
+        length = uint8(bound(length, 0, 7));
+        if (length > 0) length++;
+        Safe safe = forkSafe();
+        SafeTx[] memory txs = new SafeTx[](length);
+        for (uint256 i = 0; i < length; i++) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            address to = address(uint160(uint256(keccak256(abi.encode(seed, i)))));
+            txs[i] = SafeTx({to: to, value: i, data: abi.encode(seed, i), operation: Enum.Operation.Call});
+        }
+        SafeTx memory bundled = LibSafeTx.bundleTx(txs);
+        SafeTx memory wrapped = LibSafeTx.multiSendTx(txs);
+        assertEq(bundled.to, wrapped.to);
+        assertEq(bundled.value, wrapped.value);
+        assertEq(bundled.data, wrapped.data);
+        assertEq(uint8(bundled.operation), uint8(wrapped.operation));
+        assertEq(LibSafeTx.bundleSafeTxHash(safe, txs, nonce), LibSafeTx.multiSendSafeTxHash(safe, txs, nonce));
     }
 
     /// `sortAscending` returns a new ascending permutation of its input and
