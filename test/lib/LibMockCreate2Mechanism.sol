@@ -202,13 +202,11 @@ library LibMockCreate2Mechanism {
     {
         MockCreate2Mechanism memory mechanism = decode(suite);
         if (!mechanism.perNetwork) {
+            // forge-lint: disable-next-line(boolean-cst)
             return (true, suite.storedDeployedAddress);
         }
         (bool found, uint256 index) = networkIndex(mechanism, chainId);
-        if (!found) {
-            return (false, address(0));
-        }
-        return (true, mechanism.networks[index].deployedAddress);
+        return (found, found ? mechanism.networks[index].deployedAddress : address(0));
     }
 
     function deployStepData(DeployDeclaration memory, DeploySuite memory suite, uint256 chainId)

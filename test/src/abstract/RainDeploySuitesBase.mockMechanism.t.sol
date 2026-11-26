@@ -123,11 +123,13 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         networks[2] = network(42161, address(0xa3));
         DeploySuite memory suite = withNetworks(sDeploy.externalMockRelease(), networks);
         address[] memory deployed = sDeploy.externalDeployedAddresses(suite);
-        address[] memory recorded = sDeploy.externalRecordedAddresses(suite);
+        (bool[] memory isRecorded, address[] memory recorded) = sDeploy.externalRecordedAddresses(suite);
         assertEq(deployed.length, 3);
+        assertEq(isRecorded.length, 3);
         assertEq(recorded.length, 3);
         for (uint256 i = 0; i < 3; i++) {
             assertEq(deployed[i], networkAddress(networks[i].chainId));
+            assertTrue(isRecorded[i]);
             assertEq(recorded[i], networks[i].deployedAddress);
         }
     }
@@ -137,11 +139,13 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         DeploySuite memory suite = singleSuite();
         suite.storedDeployedAddress = address(0xb1);
         address[] memory deployed = sDeploy.externalDeployedAddresses(suite);
-        address[] memory recorded = sDeploy.externalRecordedAddresses(suite);
+        (bool[] memory isRecorded, address[] memory recorded) = sDeploy.externalRecordedAddresses(suite);
         assertEq(deployed.length, 2);
+        assertEq(isRecorded.length, 2);
         assertEq(recorded.length, 2);
         for (uint256 i = 0; i < 2; i++) {
             assertEq(deployed[i], create2Address(MOCK_CREATE2_SALT));
+            assertTrue(isRecorded[i]);
             assertEq(recorded[i], address(0xb1));
         }
     }

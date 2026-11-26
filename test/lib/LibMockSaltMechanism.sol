@@ -78,6 +78,7 @@ library LibMockSaltMechanism {
         pure
         returns (bool, address)
     {
+        // forge-lint: disable-next-line(boolean-cst)
         return (true, suite.storedDeployedAddress);
     }
 
