@@ -16,7 +16,7 @@ contract RainDeployVerifyBaseDependencyClosureTest is TransitiveDependencyDeploy
         address sibling = siblingSuite().storedDeployedAddress;
 
         DeployDeclaration memory d = declaration();
-        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.emptyIndex(), suite);
 
         assertEq(derived.suite, "dependent");
         assertEq(derived.deployedAddresses.length, suite.networks.length);

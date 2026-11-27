@@ -317,8 +317,8 @@ struct DeployMechanismHandler {
     function(DeployDeclaration memory, DeploySuite memory)
         internal
         view returns (function(Vm, string memory, address, bytes memory) internal returns (address)) deployStep;
-    function(DeployDeclaration memory, DeploySuiteIndex memory, Vm, DeploySuite memory) internal returns (address[] memory)
-        deployLocally;
+    function(DeployDeclaration memory, DeploySuiteIndex memory, Vm, DeploySuite memory)
+        internal returns (address[] memory) deployLocally;
     function(DeployDeclaration memory, DeploySuiteIndex memory, Vm, DeploySuite memory) internal deployLocallyOnChain;
     function(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory) internal view
         addUnrecordedNetworks;

@@ -386,7 +386,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function testSnapshotInternallyConsistent() external {
         DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
-        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
         for (uint256 i = 0; i < suites.length; i++) {
             checkInternallyConsistent(d, index, suites[i]);
         }

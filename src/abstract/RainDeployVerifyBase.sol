@@ -76,7 +76,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         internal
         returns (DerivedDeploy[] memory)
     {
-        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
         DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
             derived[i] = deriveDeployment(d, index, suites[i]);

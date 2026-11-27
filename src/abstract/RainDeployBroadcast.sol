@@ -213,10 +213,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         address deployer = LibRainDeploy.rememberDeployer(vm, deployerPrivateKey);
         function(Vm, string memory, address, bytes memory) internal returns (address) step = deployStep(d, suite);
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
-        DeployDependency[] memory closure =
-            LibRainDeployDeclaration.dependencyClosure(
-                d, LibRainDeployDeclaration.closureIndex(d), suite, deploys.expectedAddresses
-            );
+        DeployDependency[] memory closure = LibRainDeployDeclaration.dependencyClosure(
+            d, LibRainDeployDeclaration.emptyIndex(), suite, deploys.expectedAddresses
+        );
         for (uint256 i = 0; i < configs.length; i++) {
             LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], closure);
             preDeployCheck(d, suite, configs[i]);
@@ -318,7 +317,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         uint256[] memory chainIds,
         address deployer
     ) internal {
-        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
         for (uint256 i = 0; i < chainIds.length; i++) {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);

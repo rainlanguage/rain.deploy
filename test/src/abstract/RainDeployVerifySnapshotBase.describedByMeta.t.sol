@@ -34,14 +34,14 @@ contract RainDeployVerifySnapshotBaseDescribedByMetaTest is ExampleDeploySuites,
     function externalCheckInternallyConsistent(address metaBoard, DeploySuite memory suite) external {
         DeployDeclaration memory d = declaration();
         d.metaBoard = metaBoard;
-        checkInternallyConsistent(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        checkInternallyConsistent(d, LibRainDeployDeclaration.emptyIndex(), suite);
     }
 
     function externalCheckDescribedByMeta(DeploySuite memory suite) external {
         DeployDeclaration memory d = declaration();
         LibMockCreate2Mechanism.extend(d);
         d.metaBoard = META_BOARD;
-        checkDescribedByMeta(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        checkDescribedByMeta(d, LibRainDeployDeclaration.emptyIndex(), suite);
     }
 
     function zoltuSuite(bytes memory creationCode, bytes memory runtimeCode, bytes memory meta)

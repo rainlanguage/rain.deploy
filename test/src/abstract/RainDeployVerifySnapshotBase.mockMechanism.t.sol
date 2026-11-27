@@ -70,7 +70,7 @@ contract RainDeployVerifySnapshotBaseMockMechanismTest is MockCreate2DeploySuite
 
     function externalCheckInternallyConsistent(DeploySuite memory suite) external {
         DeployDeclaration memory d = declaration();
-        checkInternallyConsistent(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        checkInternallyConsistent(d, LibRainDeployDeclaration.emptyIndex(), suite);
     }
 
     function releaseRecording(uint256 index, address recorded) internal view returns (DeploySuite memory) {

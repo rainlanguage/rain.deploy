@@ -66,7 +66,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         });
 
         DeployDeclaration memory d = declaration();
-        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.emptyIndex(), suite);
 
         assertEq(derived.suite, "a-declared-key");
         assertEq(derived.deployedAddresses.length, suite.networks.length);
@@ -186,7 +186,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
     /// @return The derivation.
     function externalDeriveDeployment(DeploySuite memory suite) external returns (DerivedDeploy memory) {
         DeployDeclaration memory d = declaration();
-        return deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        return deriveDeployment(d, LibRainDeployDeclaration.emptyIndex(), suite);
     }
 
     /// A suite whose CONSTRUCTOR reads a dependency MUST derive, against the
@@ -199,7 +199,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         DeployDeclaration memory d = declaration();
         DerivedDeploy memory derived = deriveDeployment(
             d,
-            LibRainDeployDeclaration.closureIndex(d),
+            LibRainDeployDeclaration.emptyIndex(),
             dependentSuite(creationCode, mockDeployableDependencies(addresses))
         );
 
@@ -228,7 +228,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         DeployDeclaration memory d = declaration();
         DerivedDeploy memory derived = deriveDeployment(
             d,
-            LibRainDeployDeclaration.closureIndex(d),
+            LibRainDeployDeclaration.emptyIndex(),
             dependentSuite(creationCode, mockDeployableDependencies(addresses))
         );
 
@@ -286,7 +286,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
         DeployDeclaration memory d = declaration();
         DerivedDeploy memory derived =
-            deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, dependencies));
+            deriveDeployment(d, LibRainDeployDeclaration.emptyIndex(), dependentSuite(creationCode, dependencies));
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));

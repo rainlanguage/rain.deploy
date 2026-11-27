@@ -113,7 +113,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @param suite The suite to check.
     function externalCheckInternallyConsistent(DeploySuite memory suite) external {
         DeployDeclaration memory d = declaration();
-        checkInternallyConsistent(d, LibRainDeployDeclaration.closureIndex(d), suite);
+        checkInternallyConsistent(d, LibRainDeployDeclaration.emptyIndex(), suite);
     }
 
     /// External wrapper for `checkFrozenSnapshotsReleased` so `vm.expectRevert`

@@ -91,7 +91,7 @@ contract RainDeployVerifySnapshotBaseDependencyClosureTest is ExampleDeploySuite
         DeployDeclaration memory d = synthetic(0, count, size, false);
         DeploySuite[] memory suites = allSuites(d);
         uint256 start = freeMemoryPointer();
-        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
         for (uint256 i = 0; i < suites.length; i++) {
             checkInternallyConsistent(d, index, suites[i]);
         }
@@ -110,7 +110,7 @@ contract RainDeployVerifySnapshotBaseDependencyClosureTest is ExampleDeploySuite
         DeployDeclaration memory d = synthetic(1, 2, 0, true);
         bytes memory declared = abi.encode(d.released, d.candidates);
 
-        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
         checkInternallyConsistent(d, index, d.released[0]);
         for (uint256 i = 0; i < d.candidates.length; i++) {
             checkInternallyConsistent(d, index, d.candidates[i].snapshot);
