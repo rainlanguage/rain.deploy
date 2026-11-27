@@ -192,10 +192,13 @@ library LibRainDeployZoltuMechanism {
         LibRainDeploy.logVerifyCommands(vm, networks, deployed[0], suite.artifactPath);
     }
 
-    function writeSuiteSnapshot(DeployDeclaration memory, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
-        internal
-        returns (string memory)
-    {
+    function writeSuiteSnapshot(
+        DeployDeclaration memory,
+        DeploySuiteIndex memory,
+        Vm vm,
+        SnapshotFile memory file,
+        DeploySuite memory suite
+    ) internal returns (string memory) {
         checkMechanismData(suite);
         return LibRainDeploySnapshot.writeSnapshot(
             vm,

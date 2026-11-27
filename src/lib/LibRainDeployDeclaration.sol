@@ -507,17 +507,6 @@ library LibRainDeployDeclaration {
         return (suiteIndexes, externalIndexes);
     }
 
-    /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
-    /// refusing `DependencyCycle` where they reach one of `own`.
-    /// @param own Every address `suite` occupies on the networks it is deployed to.
-    function dependencyClosure(DeployDeclaration memory d, DeploySuite memory suite, address[] memory own)
-        internal
-        view
-        returns (DeployDependency[] memory)
-    {
-        return dependencyClosure(d, emptyIndex(), suite, own);
-    }
-
     /// An unbuilt index, built from `d` by the first closure over it that needs one.
     function emptyIndex() internal pure returns (DeploySuiteIndex memory) {
         return DeploySuiteIndex({built: false, suites: new DeploySuite[](0), recorded: new address[][](0)});
@@ -539,7 +528,10 @@ library LibRainDeployDeclaration {
         index.built = true;
     }
 
-    /// `dependencyClosure` over `index`, which MUST be `emptyIndex()` or built from `d` as it is now.
+    /// `suite`'s dependencies then every suite dependency's own, transitively and first entry winning per address,
+    /// refusing `DependencyCycle` where they reach one of `own`.
+    /// @param index MUST be `emptyIndex()` or built from `d` as it is now.
+    /// @param own Every address `suite` occupies on the networks it is deployed to.
     function dependencyClosure(
         DeployDeclaration memory d,
         DeploySuiteIndex memory index,
@@ -600,17 +592,8 @@ library LibRainDeployDeclaration {
     }
 
     /// Etches each dependency in `suite`'s dependency closure at its address.
+    /// @param index MUST be `emptyIndex()` or built from `d` as it is now.
     /// @param own Every address `suite` occupies on the networks it is deployed to.
-    function etchDependencyClosure(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, address[] memory own)
-        internal
-    {
-        DeployDependency[] memory closure = dependencyClosure(d, suite, own);
-        for (uint256 i = 0; i < closure.length; i++) {
-            vm.etch(closure[i].deployedAddress, closure[i].runtimeCode);
-        }
-    }
-
-    /// `etchDependencyClosure` over `index`, which MUST be `emptyIndex()` or built from `d` as it is now.
     function etchDependencyClosure(
         DeployDeclaration memory d,
         DeploySuiteIndex memory index,
