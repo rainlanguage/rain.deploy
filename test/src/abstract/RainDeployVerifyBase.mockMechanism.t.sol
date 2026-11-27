@@ -23,7 +23,8 @@ contract RainDeployVerifyBaseMockMechanismTest is MockCreate2DeploySuites, RainD
     }
 
     function externalDeriveDeployment(DeploySuite memory suite) external returns (DerivedDeploy memory) {
-        return deriveDeployment(declaration(), suite);
+        DeployDeclaration memory d = declaration();
+        return deriveDeployment(d, LibRainDeployDeclaration.emptyIndex(), suite);
     }
 
     /// The release, with `networks` its suite's networks in that order.

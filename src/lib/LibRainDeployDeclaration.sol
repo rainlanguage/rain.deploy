@@ -22,6 +22,13 @@ import {
 } from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 
+/// A declaration's suites, snapshots by reference, with each suite's `recordedOnly` in the same order, once `built`.
+struct DeploySuiteIndex {
+    bool built;
+    DeploySuite[] suites;
+    address[][] recorded;
+}
+
 /// @title LibRainDeployDeclaration
 /// @notice The core layer of a declaration, and what every layer composes with.
 library LibRainDeployDeclaration {
@@ -373,6 +380,15 @@ library LibRainDeployDeclaration {
 
     /// The released suites then a copy of each candidate snapshot, unchecked.
     function releasedThenCandidates(DeployDeclaration memory d) private pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = releasedThenCandidateSnapshots(d);
+        for (uint256 i = d.released.length; i < suites.length; i++) {
+            suites[i] = abi.decode(abi.encode(suites[i]), (DeploySuite));
+        }
+        return suites;
+    }
+
+    /// The released suites then each candidate snapshot itself, uncopied and unchecked.
+    function releasedThenCandidateSnapshots(DeployDeclaration memory d) private pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = d.released;
         DeployCandidate[] memory candidates = d.candidates;
         DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
@@ -380,7 +396,7 @@ library LibRainDeployDeclaration {
             suites[i] = released[i];
         }
         for (uint256 i = 0; i < candidates.length; i++) {
-            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
+            suites[released.length + i] = candidates[i].snapshot;
         }
         return suites;
     }
@@ -499,15 +515,46 @@ library LibRainDeployDeclaration {
         view
         returns (DeployDependency[] memory)
     {
+        return dependencyClosure(d, emptyIndex(), suite, own);
+    }
+
+    /// An unbuilt index, built from `d` by the first closure over it that needs one.
+    function emptyIndex() internal pure returns (DeploySuiteIndex memory) {
+        return DeploySuiteIndex({built: false, suites: new DeploySuite[](0), recorded: new address[][](0)});
+    }
+
+    /// Builds `index` from `d` unless it is already built.
+    function buildIndex(DeployDeclaration memory d, DeploySuiteIndex memory index) private view {
+        if (index.built) {
+            return;
+        }
+        // Uncopied: per-suite checks close over every suite, so copying here allocates O(suites^2).
+        DeploySuite[] memory suites = releasedThenCandidateSnapshots(d);
+        address[][] memory recorded = new address[][](suites.length);
+        for (uint256 i = 0; i < suites.length; i++) {
+            recorded[i] = recordedOnly(d, suites[i]);
+        }
+        index.suites = suites;
+        index.recorded = recorded;
+        index.built = true;
+    }
+
+    /// `dependencyClosure` over `index`, which MUST be `emptyIndex()` or built from `d` as it is now.
+    function dependencyClosure(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        DeploySuite memory suite,
+        address[] memory own
+    ) internal view returns (DeployDependency[] memory) {
         if (suite.dependencies.length == 0) {
             return new DeployDependency[](0);
         }
-        DeploySuite[] memory suites = releasedThenCandidates(d);
+        buildIndex(d, index);
+        DeploySuite[] memory suites = index.suites;
+        address[][] memory recorded = index.recorded;
         ExternalDeployment[] memory externals = d.externalDeployments;
-        address[][] memory recorded = new address[][](suites.length);
         uint256 bound = suite.dependencies.length;
         for (uint256 i = 0; i < suites.length; i++) {
-            recorded[i] = recordedOnly(d, suites[i]);
             bound += suites[i].dependencies.length;
         }
         DeployDependency[] memory closure = new DeployDependency[](bound);
@@ -558,6 +605,20 @@ library LibRainDeployDeclaration {
         internal
     {
         DeployDependency[] memory closure = dependencyClosure(d, suite, own);
+        for (uint256 i = 0; i < closure.length; i++) {
+            vm.etch(closure[i].deployedAddress, closure[i].runtimeCode);
+        }
+    }
+
+    /// `etchDependencyClosure` over `index`, which MUST be `emptyIndex()` or built from `d` as it is now.
+    function etchDependencyClosure(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        DeploySuite memory suite,
+        address[] memory own
+    ) internal {
+        DeployDependency[] memory closure = dependencyClosure(d, index, suite, own);
         for (uint256 i = 0; i < closure.length; i++) {
             vm.etch(closure[i].deployedAddress, closure[i].runtimeCode);
         }

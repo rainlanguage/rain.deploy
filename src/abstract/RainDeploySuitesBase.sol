@@ -11,7 +11,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 import {MetaBoardUndeclared} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
@@ -317,8 +317,9 @@ struct DeployMechanismHandler {
     function(DeployDeclaration memory, DeploySuite memory)
         internal
         view returns (function(Vm, string memory, address, bytes memory) internal returns (address)) deployStep;
-    function(DeployDeclaration memory, Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
-    function(DeployDeclaration memory, Vm, DeploySuite memory) internal deployLocallyOnChain;
+    function(DeployDeclaration memory, DeploySuiteIndex memory, Vm, DeploySuite memory)
+        internal returns (address[] memory) deployLocally;
+    function(DeployDeclaration memory, DeploySuiteIndex memory, Vm, DeploySuite memory) internal deployLocallyOnChain;
     function(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory) internal view
         addUnrecordedNetworks;
     function(DeployDeclaration memory, DeploySuite memory) internal view addRecordedNetworks;
@@ -491,15 +492,20 @@ abstract contract RainDeploySuitesBase {
         return mechanismOf(d, suite).deployStep(d, suite);
     }
 
-    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
+    function deployLocally(DeployDeclaration memory d, DeploySuiteIndex memory index, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
     {
-        return mechanismOf(d, suite).deployLocally(d, vm, suite);
+        return mechanismOf(d, suite).deployLocally(d, index, vm, suite);
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        mechanismOf(d, suite).deployLocallyOnChain(d, vm, suite);
+    function deployLocallyOnChain(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        DeploySuite memory suite
+    ) internal {
+        mechanismOf(d, suite).deployLocallyOnChain(d, index, vm, suite);
     }
 
     function addUnrecordedNetworks(
