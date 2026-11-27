@@ -373,6 +373,15 @@ library LibRainDeployDeclaration {
 
     /// The released suites then a copy of each candidate snapshot, unchecked.
     function releasedThenCandidates(DeployDeclaration memory d) private pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = releasedThenCandidateSnapshots(d);
+        for (uint256 i = d.released.length; i < suites.length; i++) {
+            suites[i] = abi.decode(abi.encode(suites[i]), (DeploySuite));
+        }
+        return suites;
+    }
+
+    /// The released suites then each candidate snapshot itself, uncopied and unchecked.
+    function releasedThenCandidateSnapshots(DeployDeclaration memory d) private pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = d.released;
         DeployCandidate[] memory candidates = d.candidates;
         DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
@@ -380,7 +389,7 @@ library LibRainDeployDeclaration {
             suites[i] = released[i];
         }
         for (uint256 i = 0; i < candidates.length; i++) {
-            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
+            suites[released.length + i] = candidates[i].snapshot;
         }
         return suites;
     }
@@ -502,7 +511,8 @@ library LibRainDeployDeclaration {
         if (suite.dependencies.length == 0) {
             return new DeployDependency[](0);
         }
-        DeploySuite[] memory suites = releasedThenCandidates(d);
+        // Uncopied: per-suite checks call this once per suite, so copying here allocates O(suites^2).
+        DeploySuite[] memory suites = releasedThenCandidateSnapshots(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         address[][] memory recorded = new address[][](suites.length);
         uint256 bound = suite.dependencies.length;
