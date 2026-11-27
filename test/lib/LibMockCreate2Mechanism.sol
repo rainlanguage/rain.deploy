@@ -182,7 +182,13 @@ library LibMockCreate2Mechanism {
         }
     }
 
-    function etchFactory(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, address[] memory own) internal {
+    function etchFactory(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        DeploySuite memory suite,
+        address[] memory own
+    ) internal {
         LibRainDeployDeclaration.etchDependencyClosure(d, index, vm, suite, own);
         vm.etch(decode(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
@@ -278,7 +284,7 @@ library LibMockCreate2Mechanism {
     ) internal {
         address[] memory own = new address[](1);
         own[0] = deployedAddress(d, suite, block.chainid);
-        etchFactory(d, vm, suite, own);
+        etchFactory(d, index, vm, suite, own);
         deployAt(vm, suite, salt(suite, block.chainid), own[0]);
     }
 
