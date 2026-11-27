@@ -3,7 +3,8 @@
 pragma solidity =0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {TransitiveDependencyDeploySuites} from "../../abstract/TransitiveDependencyDeploySuites.sol";
 import {READ_DEPENDENCY} from "../../concrete/MockDependencyReader.sol";
 import {MockDependencyReaderCaller} from "../../concrete/MockDependencyReaderCaller.sol";
@@ -14,7 +15,8 @@ contract RainDeployVerifyBaseDependencyClosureTest is TransitiveDependencyDeploy
         DeploySuite memory suite = declaredDependentSuite();
         address sibling = siblingSuite().storedDeployedAddress;
 
-        DerivedDeploy memory derived = deriveDeployment(declaration(), suite);
+        DeployDeclaration memory d = declaration();
+        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), suite);
 
         assertEq(derived.suite, "dependent");
         assertEq(derived.deployedAddresses.length, suite.networks.length);

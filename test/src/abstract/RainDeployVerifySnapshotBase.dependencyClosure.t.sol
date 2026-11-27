@@ -11,7 +11,7 @@ import {
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
@@ -91,8 +91,9 @@ contract RainDeployVerifySnapshotBaseDependencyClosureTest is ExampleDeploySuite
         DeployDeclaration memory d = synthetic(0, count, size, false);
         DeploySuite[] memory suites = allSuites(d);
         uint256 start = freeMemoryPointer();
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
         for (uint256 i = 0; i < suites.length; i++) {
-            checkInternallyConsistent(d, suites[i]);
+            checkInternallyConsistent(d, index, suites[i]);
         }
         return freeMemoryPointer() - start;
     }
@@ -108,9 +109,10 @@ contract RainDeployVerifySnapshotBaseDependencyClosureTest is ExampleDeploySuite
         DeployDeclaration memory d = synthetic(1, 2, 0, true);
         bytes memory declared = abi.encode(d.released, d.candidates);
 
-        checkInternallyConsistent(d, d.released[0]);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
+        checkInternallyConsistent(d, index, d.released[0]);
         for (uint256 i = 0; i < d.candidates.length; i++) {
-            checkInternallyConsistent(d, d.candidates[i].snapshot);
+            checkInternallyConsistent(d, index, d.candidates[i].snapshot);
         }
 
         assertEq(abi.encode(d.released, d.candidates), declared);

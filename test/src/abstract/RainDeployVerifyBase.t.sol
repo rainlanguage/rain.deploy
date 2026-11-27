@@ -65,7 +65,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             describedByMeta: ""
         });
 
-        DerivedDeploy memory derived = deriveDeployment(declaration(), suite);
+        DeployDeclaration memory d = declaration();
+        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), suite);
 
         assertEq(derived.suite, "a-declared-key");
         assertEq(derived.deployedAddresses.length, suite.networks.length);
@@ -184,7 +185,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
     /// @param suite The suite to derive.
     /// @return The derivation.
     function externalDeriveDeployment(DeploySuite memory suite) external returns (DerivedDeploy memory) {
-        return deriveDeployment(declaration(), suite);
+        DeployDeclaration memory d = declaration();
+        return deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), suite);
     }
 
     /// A suite whose CONSTRUCTOR reads a dependency MUST derive, against the
@@ -194,8 +196,9 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         addresses[0] = FIRST_DEPENDENCY;
         bytes memory creationCode = dependentCreationCode(addresses);
 
+        DeployDeclaration memory d = declaration();
         DerivedDeploy memory derived =
-            deriveDeployment(declaration(), dependentSuite(creationCode, mockDeployableDependencies(addresses)));
+            deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, mockDeployableDependencies(addresses)));
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
@@ -219,8 +222,9 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         address[] memory addresses = twoDependencies();
         bytes memory creationCode = dependentCreationCode(addresses);
 
+        DeployDeclaration memory d = declaration();
         DerivedDeploy memory derived =
-            deriveDeployment(declaration(), dependentSuite(creationCode, mockDeployableDependencies(addresses)));
+            deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, mockDeployableDependencies(addresses)));
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
@@ -274,7 +278,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: type(MockDeployable).runtimeCode
         });
 
-        DerivedDeploy memory derived = deriveDeployment(declaration(), dependentSuite(creationCode, dependencies));
+        DeployDeclaration memory d = declaration();
+        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, dependencies));
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));

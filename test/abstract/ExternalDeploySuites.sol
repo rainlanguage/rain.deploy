@@ -121,11 +121,13 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     function externalDeployLocally(Vm localVm, DeploySuite memory suite) external returns (address[] memory) {
-        return deployLocally(declaration(), localVm, suite);
+        DeployDeclaration memory d = declaration();
+        return deployLocally(d, LibRainDeployDeclaration.closureIndex(d), localVm, suite);
     }
 
     function externalDeployLocallyOnChain(Vm localVm, DeploySuite memory suite) external {
-        deployLocallyOnChain(declaration(), localVm, suite);
+        DeployDeclaration memory d = declaration();
+        deployLocallyOnChain(d, LibRainDeployDeclaration.closureIndex(d), localVm, suite);
     }
 
     /// @return `suite` as `addUnrecordedNetworks` leaves it.

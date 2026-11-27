@@ -64,7 +64,8 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
     }
 
     function deployLocallyOf(DeploySuite[] memory candidates, DeploySuite memory suite) external {
-        LibMockCreate2Mechanism.deployLocally(declarationOf(new DeploySuite[](0), candidates), vm, suite);
+        DeployDeclaration memory d = declarationOf(new DeploySuite[](0), candidates);
+        LibMockCreate2Mechanism.deployLocally(d, LibRainDeployDeclaration.closureIndex(d), vm, suite);
     }
 
     function dep(address at, bytes memory code) internal pure returns (DeployDependency memory) {
@@ -452,7 +453,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         bytes memory declared = declaredSuites(d);
         DeploySuite memory subject = d.candidates[0].snapshot;
 
-        address[] memory deployed = LibRainDeployZoltuMechanism.deployLocally(d, vm, subject);
+        address[] memory deployed = LibRainDeployZoltuMechanism.deployLocally(d, LibRainDeployDeclaration.closureIndex(d), vm, subject);
 
         assertEq(deployed[0].code, type(MockDeployable).runtimeCode);
         assertEq(CHAINED_C.code, hex"cc");
