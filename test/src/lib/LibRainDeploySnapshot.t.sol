@@ -19,6 +19,7 @@ import {
     SnapshotFile,
     UnexpectedMechanismData
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     EmptyRelease,
@@ -135,7 +136,9 @@ contract LibRainDeploySnapshotTest is Test {
         external
         returns (string memory)
     {
-        return LibRainDeployZoltuMechanism.writeSuiteSnapshot(zoltuDeclaration(), vm, file, suite);
+        return LibRainDeployZoltuMechanism.writeSuiteSnapshot(
+            zoltuDeclaration(), LibRainDeployDeclaration.emptyIndex(), vm, file, suite
+        );
     }
 
     function clearFixtureTree(string memory root) internal {

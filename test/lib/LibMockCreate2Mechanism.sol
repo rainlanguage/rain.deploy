@@ -404,10 +404,13 @@ library LibMockCreate2Mechanism {
         emit MockCreate2Verification(networks, suite.suite, deployed);
     }
 
-    function writeSuiteSnapshot(DeployDeclaration memory, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
-        internal
-        returns (string memory)
-    {
+    function writeSuiteSnapshot(
+        DeployDeclaration memory,
+        DeploySuiteIndex memory,
+        Vm vm,
+        SnapshotFile memory file,
+        DeploySuite memory suite
+    ) internal returns (string memory) {
         string memory path = LibRainDeploySnapshot.writeSnapshot(
             vm,
             file.root,

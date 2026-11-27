@@ -198,7 +198,11 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         DeploySuite memory suite
     ) external returns (string memory) {
         return writeSuiteSnapshot(
-            declaration(), fileVm, SnapshotFile(root, dir, contractName, spdxLicenseIdentifier, copyrightText), suite
+            declaration(),
+            LibRainDeployDeclaration.emptyIndex(),
+            fileVm,
+            SnapshotFile(root, dir, contractName, spdxLicenseIdentifier, copyrightText),
+            suite
         );
     }
 
