@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {LibAffix} from "rain-string-0.3.11/src/lib/affix/LibAffix.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeployDeclaration, DeploySuite, DerivationSnapshotRevertFailed} from "./RainDeploySuitesBase.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
@@ -76,8 +77,12 @@ error FrozenCodeRecordInconsistent(string path, bytes32 storedBytecodeHash, byte
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// Checks one suite against itself.
     /// @param suite The suite to check.
-    function checkInternallyConsistent(DeployDeclaration memory d, DeploySuite memory suite) internal {
-        DerivedDeploy memory derived = deriveDeployment(d, suite);
+    function checkInternallyConsistent(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        DeploySuite memory suite
+    ) internal {
+        DerivedDeploy memory derived = deriveDeployment(d, index, suite);
 
         (bool[] memory isRecorded, address[] memory recorded) = recordedAddresses(d, suite);
         for (uint256 i = 0; i < recorded.length; i++) {
@@ -95,20 +100,22 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             revert StoredRuntimeCodeHashMismatch(suite.suite, suite.storedBytecodeHash, runtimeCodeHash);
         }
 
-        checkDescribedByMeta(d, suite);
+        checkDescribedByMeta(d, index, suite);
     }
 
     /// A suite carrying a described-by meta MUST name a `metaBoard()`, and every nonzero address its local deployment
     /// returns MUST answer `describedByMetaV1()` with the meta's hash.
     /// @param d The declaration.
     /// @param suite The suite to check.
-    function checkDescribedByMeta(DeployDeclaration memory d, DeploySuite memory suite) internal {
+    function checkDescribedByMeta(DeployDeclaration memory d, DeploySuiteIndex memory index, DeploySuite memory suite)
+        internal
+    {
         checkedMetaBoard(d, suite);
         if (suite.describedByMeta.length == 0) {
             return;
         }
         uint256 snapshotId = vm.snapshotState();
-        address[] memory deployed = deployLocally(d, vm, suite);
+        address[] memory deployed = deployLocally(d, index, vm, suite);
         for (uint256 i = 0; i < deployed.length; i++) {
             if (deployed[i] != address(0)) {
                 LibRainDeployDescribedByMeta.checkDescribes(suite.suite, deployed[i], suite.describedByMeta);
@@ -379,8 +386,9 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function testSnapshotInternallyConsistent() external {
         DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
         for (uint256 i = 0; i < suites.length; i++) {
-            checkInternallyConsistent(d, suites[i]);
+            checkInternallyConsistent(d, index, suites[i]);
         }
     }
 

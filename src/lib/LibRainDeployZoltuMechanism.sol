@@ -13,7 +13,7 @@ import {
     ZoltuDerivationMismatch
 } from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
-import {LibRainDeployDeclaration} from "./LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "./LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "./LibRainDeploySnapshot.sol";
 
 /// @dev The Zoltu mechanism's id.
@@ -114,14 +114,14 @@ library LibRainDeployZoltuMechanism {
     /// Deploys through the etched Zoltu factory with its dependency closure etched, refusing
     /// `ZoltuDerivationMismatch` where the factory and `LibRainDeploy.zoltuAddress` disagree.
     /// @return Its one address, once per each of its `networks`.
-    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
+    function deployLocally(DeployDeclaration memory d, DeploySuiteIndex memory index, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
     {
         address expected = deployedAddress(d, suite, 0);
         address[] memory own = new address[](1);
         own[0] = expected;
-        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite, own);
+        LibRainDeployDeclaration.etchDependencyClosure(d, index, vm, suite, own);
         vm.etch(expected, hex"");
         vm.resetNonce(expected);
         address zoltuAddress = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);
@@ -135,8 +135,13 @@ library LibRainDeployZoltuMechanism {
         return deployed;
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        deployLocally(d, vm, suite);
+    function deployLocallyOnChain(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        DeploySuite memory suite
+    ) internal {
+        deployLocally(d, index, vm, suite);
     }
 
     /// Its one address covers every network, so there is nothing to add.

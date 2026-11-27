@@ -11,7 +11,7 @@ import {
     SnapshotFile
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {MockCreate2Factory} from "../concrete/MockCreate2Factory.sol";
 import {LibMockMechanismProbe} from "./LibMockMechanismProbe.sol";
@@ -183,7 +183,7 @@ library LibMockCreate2Mechanism {
     }
 
     function etchFactory(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, address[] memory own) internal {
-        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite, own);
+        LibRainDeployDeclaration.etchDependencyClosure(d, index, vm, suite, own);
         vm.etch(decode(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
 
@@ -227,7 +227,7 @@ library LibMockCreate2Mechanism {
 
     /// @return One address per each of its `networks`; a single-address suite is deployed once. A per-network suite
     /// returns `address(0)` for, and deploys nothing on, a network its payload records nothing on.
-    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
+    function deployLocally(DeployDeclaration memory d, DeploySuiteIndex memory index, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
     {
@@ -270,7 +270,12 @@ library LibMockCreate2Mechanism {
         return kept;
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+    function deployLocallyOnChain(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        DeploySuite memory suite
+    ) internal {
         address[] memory own = new address[](1);
         own[0] = deployedAddress(d, suite, block.chainid);
         etchFactory(d, vm, suite, own);

@@ -11,6 +11,7 @@ import {
     RainDeploySuitesBase,
     ZoltuDerivationMismatch
 } from "./RainDeploySuitesBase.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 
 /// Thrown when a suite's mechanism derives no deployed address on any of the suite's `networks`, so there is no
 /// code to take the suite's code hash from.
@@ -35,13 +36,13 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// alone.
     /// @param suite The suite to derive from.
     /// @return The addresses and code hash the suite's mechanism produces.
-    function deriveDeployment(DeployDeclaration memory d, DeploySuite memory suite)
+    function deriveDeployment(DeployDeclaration memory d, DeploySuiteIndex memory index, DeploySuite memory suite)
         internal
         returns (DerivedDeploy memory)
     {
         uint256 snapshotId = vm.snapshotState();
 
-        address[] memory deployedAddresses = deployLocally(d, vm, suite);
+        address[] memory deployedAddresses = deployLocally(d, index, vm, suite);
         // `address(0)` is a network with nothing recorded, and its code hash is not the suite's.
         uint256 deployed = 0;
         while (deployed < deployedAddresses.length && deployedAddresses[deployed] == address(0)) {
@@ -75,9 +76,10 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         internal
         returns (DerivedDeploy[] memory)
     {
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
         DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
-            derived[i] = deriveDeployment(d, suites[i]);
+            derived[i] = deriveDeployment(d, index, suites[i]);
         }
         return derived;
     }

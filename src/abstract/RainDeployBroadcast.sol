@@ -14,7 +14,7 @@ import {
 } from "./RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
-import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
@@ -214,7 +214,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         function(Vm, string memory, address, bytes memory) internal returns (address) step = deployStep(d, suite);
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(configs));
         DeployDependency[] memory closure =
-            LibRainDeployDeclaration.dependencyClosure(d, suite, deploys.expectedAddresses);
+            LibRainDeployDeclaration.dependencyClosure(
+                d, LibRainDeployDeclaration.closureIndex(d), suite, deploys.expectedAddresses
+            );
         for (uint256 i = 0; i < configs.length; i++) {
             LibRainDeploy.selectCheckedFork(vm, configs[i], forkIds[i], closure);
             preDeployCheck(d, suite, configs[i]);
@@ -316,11 +318,12 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         uint256[] memory chainIds,
         address deployer
     ) internal {
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.closureIndex(d);
         for (uint256 i = 0; i < chainIds.length; i++) {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);
             vm.startPrank(deployer, deployer);
-            deployLocallyOnChain(d, vm, suite);
+            deployLocallyOnChain(d, index, vm, suite);
             vm.stopPrank();
             address deployed = deployedAddress(d, suite, chainIds[i]);
             // slither-disable-next-line low-level-calls

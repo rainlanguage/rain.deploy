@@ -10,7 +10,7 @@ import {
     SnapshotFile
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibMockCreate2Mechanism, MOCK_CREATE2_FACTORY} from "./LibMockCreate2Mechanism.sol";
 import {LibMockMechanismProbe} from "./LibMockMechanismProbe.sol";
@@ -99,13 +99,13 @@ library LibMockSaltMechanism {
     }
 
     /// @return Its one address, once per each of its `networks`.
-    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
+    function deployLocally(DeployDeclaration memory d, DeploySuiteIndex memory index, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
     {
         address[] memory own = new address[](1);
         own[0] = deployedAddress(d, suite, 0);
-        LibRainDeployDeclaration.etchDependencyClosure(d, vm, suite, own);
+        LibRainDeployDeclaration.etchDependencyClosure(d, index, vm, suite, own);
         vm.etch(MOCK_CREATE2_FACTORY, type(MockCreate2Factory).runtimeCode);
         address one = MockCreate2Factory(MOCK_CREATE2_FACTORY).deploy(salt(suite), suite.creationCode);
         address[] memory deployed = new address[](suite.networks.length);
@@ -115,8 +115,13 @@ library LibMockSaltMechanism {
         return deployed;
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        deployLocally(d, vm, suite);
+    function deployLocallyOnChain(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        DeploySuite memory suite
+    ) internal {
+        deployLocally(d, index, vm, suite);
     }
 
     function addUnrecordedNetworks(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory)
