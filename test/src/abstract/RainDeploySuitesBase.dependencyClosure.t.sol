@@ -22,9 +22,9 @@ import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 
 contract RainDeploySuitesBaseDependencyClosureTest is RainDeploySuitesBase, Test {
     string constant ROOT = "fixture-lib/write-suite-snapshot-closure";
-    address constant SUBJECT = address(0x5);
-    address constant A = address(0xa);
-    address constant B = address(0xb);
+    address constant SUBJECT = address(0x5000);
+    address constant A = address(0xa000);
+    address constant B = address(0xb000);
 
     /// Zoltu, but its snapshot etches the suite's dependency closure first, as a mechanism whose snapshot deploys
     /// the suite locally does.
