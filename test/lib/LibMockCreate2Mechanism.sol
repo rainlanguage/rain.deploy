@@ -250,7 +250,7 @@ library LibMockCreate2Mechanism {
             }
             deployed[i] = deployedAddress(d, suite, chainIds[i]);
         }
-        etchFactory(d, vm, suite, nonzero(deployed));
+        etchFactory(d, index, vm, suite, nonzero(deployed));
         for (uint256 i = 0; i < deployed.length; i++) {
             if (deployed[i] != address(0) && (perNetwork || i == 0)) {
                 deployAt(vm, suite, salt(suite, chainIds[i]), deployed[i]);
