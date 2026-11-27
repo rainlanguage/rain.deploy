@@ -197,8 +197,11 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         bytes memory creationCode = dependentCreationCode(addresses);
 
         DeployDeclaration memory d = declaration();
-        DerivedDeploy memory derived =
-            deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, mockDeployableDependencies(addresses)));
+        DerivedDeploy memory derived = deriveDeployment(
+            d,
+            LibRainDeployDeclaration.closureIndex(d),
+            dependentSuite(creationCode, mockDeployableDependencies(addresses))
+        );
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
@@ -223,8 +226,11 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         bytes memory creationCode = dependentCreationCode(addresses);
 
         DeployDeclaration memory d = declaration();
-        DerivedDeploy memory derived =
-            deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, mockDeployableDependencies(addresses)));
+        DerivedDeploy memory derived = deriveDeployment(
+            d,
+            LibRainDeployDeclaration.closureIndex(d),
+            dependentSuite(creationCode, mockDeployableDependencies(addresses))
+        );
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
@@ -279,7 +285,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         });
 
         DeployDeclaration memory d = declaration();
-        DerivedDeploy memory derived = deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, dependencies));
+        DerivedDeploy memory derived =
+            deriveDeployment(d, LibRainDeployDeclaration.closureIndex(d), dependentSuite(creationCode, dependencies));
 
         assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));

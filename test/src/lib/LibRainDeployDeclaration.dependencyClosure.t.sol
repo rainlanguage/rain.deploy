@@ -440,7 +440,9 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         bytes memory declared = declaredSuites(d);
         DeploySuite memory subject = d.candidates[0].snapshot;
 
-        LibRainDeployDeclaration.etchDependencyClosure(d, vm, subject, LibRainDeployDeclaration.recordedOnly(d, subject));
+        LibRainDeployDeclaration.etchDependencyClosure(
+            d, vm, subject, LibRainDeployDeclaration.recordedOnly(d, subject)
+        );
 
         assertEq(CHAINED_A.code, hex"aa");
         assertEq(CHAINED_B.code, hex"bb");
@@ -453,7 +455,8 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         bytes memory declared = declaredSuites(d);
         DeploySuite memory subject = d.candidates[0].snapshot;
 
-        address[] memory deployed = LibRainDeployZoltuMechanism.deployLocally(d, LibRainDeployDeclaration.closureIndex(d), vm, subject);
+        address[] memory deployed =
+            LibRainDeployZoltuMechanism.deployLocally(d, LibRainDeployDeclaration.closureIndex(d), vm, subject);
 
         assertEq(deployed[0].code, type(MockDeployable).runtimeCode);
         assertEq(CHAINED_C.code, hex"cc");
