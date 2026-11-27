@@ -16,6 +16,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockCreate2DeploySuites} from "../../abstract/MockCreate2DeploySuites.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
 import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
@@ -26,6 +27,9 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
     address constant B = address(0xb);
     address constant EXTERNAL = address(0xe);
     address constant UNKNOWN = address(0xf);
+    address constant CHAINED_A = address(0xa000);
+    address constant CHAINED_B = address(0xb000);
+    address constant CHAINED_C = address(0xc000);
 
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
@@ -401,6 +405,58 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
+    }
+
+    /// Candidate `subject` reaches candidate `a`, whose dependency reaches release `b`, whose dependency is release
+    /// `c`: past the subject's own, every closure entry is one of the declaration's own dependencies.
+    function chainedDeclaration() internal pure returns (DeployDeclaration memory) {
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(CHAINED_A, hex"aa")));
+        subject.creationCode = type(MockDeployable).creationCode;
+        return declarationOf(
+            suites(suiteAt("b@0_0_1", CHAINED_B, deps(dep(CHAINED_C, hex"cc"))), leafAt("c@0_0_1", CHAINED_C)),
+            suites(subject, suiteAt("a", CHAINED_A, deps(dep(CHAINED_B, hex"bb"))))
+        );
+    }
+
+    function declaredSuites(DeployDeclaration memory d) internal pure returns (bytes memory) {
+        return abi.encode(d.released, d.candidates);
+    }
+
+    function testClosureLeavesTheDeclaredSuitesUnchanged() external view {
+        DeployDeclaration memory d = chainedDeclaration();
+        bytes memory declared = declaredSuites(d);
+        DeploySuite memory subject = d.candidates[0].snapshot;
+
+        assertClosure(
+            LibRainDeployDeclaration.dependencyClosure(d, subject, LibRainDeployDeclaration.recordedOnly(d, subject)),
+            deps(dep(CHAINED_A, hex"aa"), dep(CHAINED_B, hex"bb"), dep(CHAINED_C, hex"cc"))
+        );
+        assertEq(declaredSuites(d), declared);
+    }
+
+    function testEtchingTheClosureLeavesTheDeclaredSuitesUnchanged() external {
+        DeployDeclaration memory d = chainedDeclaration();
+        bytes memory declared = declaredSuites(d);
+        DeploySuite memory subject = d.candidates[0].snapshot;
+
+        LibRainDeployDeclaration.etchDependencyClosure(d, vm, subject, LibRainDeployDeclaration.recordedOnly(d, subject));
+
+        assertEq(CHAINED_A.code, hex"aa");
+        assertEq(CHAINED_B.code, hex"bb");
+        assertEq(CHAINED_C.code, hex"cc");
+        assertEq(declaredSuites(d), declared);
+    }
+
+    function testZoltuLocalDeployLeavesTheDeclaredSuitesUnchanged() external {
+        DeployDeclaration memory d = chainedDeclaration();
+        bytes memory declared = declaredSuites(d);
+        DeploySuite memory subject = d.candidates[0].snapshot;
+
+        address[] memory deployed = LibRainDeployZoltuMechanism.deployLocally(d, vm, subject);
+
+        assertEq(deployed[0].code, type(MockDeployable).runtimeCode);
+        assertEq(CHAINED_C.code, hex"cc");
+        assertEq(declaredSuites(d), declared);
     }
 
     function testLocalPerNetworkDeployOccupiesNoAddressOnANetworkItRecordsNothingOn() external {
