@@ -13,7 +13,7 @@ import {
     UnknownDependency
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {DeploySuiteIndex, LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockCreate2DeploySuites} from "../../abstract/MockCreate2DeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -352,6 +352,63 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
             suites(subject),
             subject
         );
+    }
+
+    function closureOver(DeployDeclaration memory d, DeploySuiteIndex memory index, DeploySuite memory suite)
+        internal
+        view
+        returns (DeployDependency[] memory)
+    {
+        return LibRainDeployDeclaration.dependencyClosure(
+            d, index, suite, LibRainDeployDeclaration.recordedOnly(d, suite)
+        );
+    }
+
+    function pointer(DeploySuite[] memory list) internal pure returns (uint256) {
+        uint256 at;
+        assembly ("memory-safe") {
+            at := list
+        }
+        return at;
+    }
+
+    function pointer(address[][] memory list) internal pure returns (uint256) {
+        uint256 at;
+        assembly ("memory-safe") {
+            at := list
+        }
+        return at;
+    }
+
+    function testPerSuiteLoopOverSuitesWithoutDependenciesDerivesNoOtherSuite() external view {
+        DeployDeclaration memory d = declarationOf(suites(uncatalogued()), suites(leafAt("a", A), leafAt("b", B)));
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
+
+        for (uint256 i = 0; i < d.candidates.length; i++) {
+            assertEq(closureOver(d, index, d.candidates[i].snapshot).length, 0);
+        }
+
+        assertFalse(index.built);
+    }
+
+    function testPerSuiteLoopBuildsTheIndexOnceAtItsFirstDependentSuite() external view {
+        DeploySuite memory b = suiteAt("b", B, deps(dep(A, hex"aa")));
+        DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(B, hex"bb")));
+        DeployDeclaration memory d = declarationOf(suites(leafAt("a", A)), suites(b, subject));
+        DeploySuiteIndex memory index = LibRainDeployDeclaration.emptyIndex();
+
+        assertEq(closureOver(d, index, d.released[0]).length, 0);
+        assertFalse(index.built);
+
+        assertClosure(closureOver(d, index, b), deps(dep(A, hex"aa")));
+        assertTrue(index.built);
+        assertEq(index.suites.length, 3);
+        uint256 builtSuites = pointer(index.suites);
+        uint256 builtRecorded = pointer(index.recorded);
+
+        assertClosure(closureOver(d, index, subject), deps(dep(B, hex"bb"), dep(A, hex"aa")));
+        assertEq(pointer(index.suites), builtSuites);
+        assertEq(pointer(index.recorded), builtRecorded);
     }
 
     function testClosureRefusesACycleThroughAnAddressItsCandidateAddsANetworkAt() external {
