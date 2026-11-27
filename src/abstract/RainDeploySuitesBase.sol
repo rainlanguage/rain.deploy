@@ -331,8 +331,8 @@ struct DeployMechanismHandler {
     function(DeployDeclaration memory, string memory, uint256) internal checkNetwork;
     function(DeployDeclaration memory, Vm, string[] memory, DeploySuite memory, address[] memory) internal
         logVerification;
-    function(DeployDeclaration memory, Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory)
-        writeSuiteSnapshot;
+    function(DeployDeclaration memory, DeploySuiteIndex memory, Vm, SnapshotFile memory, DeploySuite memory)
+        internal returns (string memory) writeSuiteSnapshot;
     function(DeployDeclaration memory, Vm, string memory, bool, string memory) internal view returns (string memory)
         releasedMechanismData;
     function(DeployDeclaration memory, string memory) internal pure returns (string memory) releasedImport;
@@ -557,11 +557,14 @@ abstract contract RainDeploySuitesBase {
         mechanismOf(d, suite).logVerification(d, vm, networks, suite, deployed);
     }
 
-    function writeSuiteSnapshot(DeployDeclaration memory d, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
-        internal
-        returns (string memory)
-    {
-        return mechanismOf(d, suite).writeSuiteSnapshot(d, vm, file, suite);
+    function writeSuiteSnapshot(
+        DeployDeclaration memory d,
+        DeploySuiteIndex memory index,
+        Vm vm,
+        SnapshotFile memory file,
+        DeploySuite memory suite
+    ) internal returns (string memory) {
+        return mechanismOf(d, suite).writeSuiteSnapshot(d, index, vm, file, suite);
     }
 
     /// @param suite The suite.

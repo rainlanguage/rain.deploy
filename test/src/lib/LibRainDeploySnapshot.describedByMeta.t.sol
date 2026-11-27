@@ -21,6 +21,7 @@ import {
     LibRainDeploySnapshot,
     RecordFacts
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibForeignLineBreaks} from "../../lib/LibForeignLineBreaks.sol";
@@ -75,6 +76,7 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
     function writeSuiteAt(string memory root, bytes memory meta) internal returns (string memory, string memory) {
         string memory path = LibRainDeployZoltuMechanism.writeSuiteSnapshot(
             zoltuDeclaration(),
+            LibRainDeployDeclaration.emptyIndex(),
             vm,
             SnapshotFile(root, "0_1_0", "Record", RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
             suite(meta)

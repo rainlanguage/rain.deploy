@@ -60,7 +60,9 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         returns (DeployDependency[] memory)
     {
         DeployDeclaration memory d = declarationOf(released, candidates);
-        return LibRainDeployDeclaration.dependencyClosure(d, suite, LibRainDeployDeclaration.recordedOnly(d, suite));
+        return LibRainDeployDeclaration.dependencyClosure(
+            d, LibRainDeployDeclaration.emptyIndex(), suite, LibRainDeployDeclaration.recordedOnly(d, suite)
+        );
     }
 
     function deployLocallyOf(DeploySuite[] memory candidates, DeploySuite memory suite) external {
@@ -458,7 +460,9 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         DeploySuite memory subject = suiteAt("subject", SUBJECT, deps(dep(recorded[0].deployedAddress, hex"72")));
 
         assertClosure(
-            LibRainDeployDeclaration.dependencyClosure(d, subject, LibRainDeployDeclaration.recordedOnly(d, subject)),
+            LibRainDeployDeclaration.dependencyClosure(
+                d, LibRainDeployDeclaration.emptyIndex(), subject, LibRainDeployDeclaration.recordedOnly(d, subject)
+            ),
             deps(dep(recorded[0].deployedAddress, hex"72"), dep(B, hex"bb"))
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -486,7 +490,9 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         DeploySuite memory subject = d.candidates[0].snapshot;
 
         assertClosure(
-            LibRainDeployDeclaration.dependencyClosure(d, subject, LibRainDeployDeclaration.recordedOnly(d, subject)),
+            LibRainDeployDeclaration.dependencyClosure(
+                d, LibRainDeployDeclaration.emptyIndex(), subject, LibRainDeployDeclaration.recordedOnly(d, subject)
+            ),
             deps(dep(CHAINED_A, hex"aa"), dep(CHAINED_B, hex"bb"), dep(CHAINED_C, hex"cc"))
         );
         assertEq(declaredSuites(d), declared);
@@ -498,7 +504,7 @@ contract LibRainDeployDeclarationDependencyClosureTest is MockCreate2DeploySuite
         DeploySuite memory subject = d.candidates[0].snapshot;
 
         LibRainDeployDeclaration.etchDependencyClosure(
-            d, vm, subject, LibRainDeployDeclaration.recordedOnly(d, subject)
+            d, LibRainDeployDeclaration.emptyIndex(), vm, subject, LibRainDeployDeclaration.recordedOnly(d, subject)
         );
 
         assertEq(CHAINED_A.code, hex"aa");
