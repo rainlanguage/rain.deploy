@@ -98,10 +98,11 @@ contract RainDeployVerifySnapshotBaseDependencyClosureTest is ExampleDeploySuite
         return freeMemoryPointer() - start;
     }
 
-    /// Copying every candidate on each suite's closure costs memory for code quadratic in the suites.
-    function testPerSuiteCheckMemoryForCodeGrowsLinearlyInSuites() external {
-        uint256 fewer = perSuiteCheckMemory(FEWER_SUITES, LARGE_CODE) - perSuiteCheckMemory(FEWER_SUITES, 0);
-        uint256 more = perSuiteCheckMemory(2 * FEWER_SUITES, LARGE_CODE) - perSuiteCheckMemory(2 * FEWER_SUITES, 0);
+    /// Copying the suites, or indexing their recorded addresses, on each suite's closure costs memory quadratic in the
+    /// suites.
+    function testPerSuiteCheckMemoryGrowsLinearlyInSuites() external {
+        uint256 fewer = perSuiteCheckMemory(FEWER_SUITES, LARGE_CODE);
+        uint256 more = perSuiteCheckMemory(2 * FEWER_SUITES, LARGE_CODE);
         assertLe(more, 3 * fewer);
     }
 
